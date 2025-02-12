@@ -1,6 +1,6 @@
 //
 //  OperationsTypeEnum.swift
-//  Tandau
+//  CheloveCheck
 //
 //  Created by Sergey Ivanov on 08.01.2025.
 //

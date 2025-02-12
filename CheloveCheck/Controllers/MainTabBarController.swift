@@ -1,7 +1,13 @@
+//
+//  SettingsViewController.swift
+//  CheloveCheck
+//
+//  Created by Sergey Ivanov on 10.01.2025.
+//
+
 import UIKit
 
 final class MainTabBarController: UITabBarController, UITabBarControllerDelegate {
-//    let receiptRepository = ReceiptRepository()
     let receiptRepository: ReceiptRepository
     
     init() {
@@ -30,7 +36,6 @@ final class MainTabBarController: UITabBarController, UITabBarControllerDelegate
             tabBar.standardAppearance = appearance
             tabBar.scrollEdgeAppearance = appearance
         } else {
-            // Для iOS < 15
             tabBar.barTintColor = .mainBackground
             tabBar.isTranslucent = false
         }

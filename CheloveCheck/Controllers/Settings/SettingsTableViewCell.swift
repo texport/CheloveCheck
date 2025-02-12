@@ -25,13 +25,11 @@ final class SettingsTableViewCell: UITableViewCell {
         return label
     }()
     
-    // Инициализация ячейки с использованием Auto Layout
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         contentView.addSubview(iconImageView)
         contentView.addSubview(titleLabel)
         
-        // Пример современных отступов и размеров
         NSLayoutConstraint.activate([
             iconImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             iconImageView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
@@ -57,7 +55,7 @@ final class SettingsTableViewCell: UITableViewCell {
         if let iconName = item.iconName {
             iconImageView.image = UIImage(named: iconName)
         }
-        // Если URL отсутствует, убираем accessory
+        
         accessoryType = item.url != nil ? .disclosureIndicator : .none
     }
 }

@@ -57,14 +57,13 @@ final class SettingsViewController: UITableViewController {
         guard let header = tableView.dequeueReusableHeaderFooterView(withIdentifier: "Header") else {
             return nil
         }
-        // Получаем snapshot из diffable data source для доступа к секции
+        
         let snapshot = dataSource.snapshot()
         let sectionIdentifier = snapshot.sectionIdentifiers[section]
         header.textLabel?.text = sectionIdentifier.title
         return header
     }
-
-    // Обработка нажатия на ячейку
+    
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         if let item = dataSource.itemIdentifier(for: indexPath), let url = item.url {

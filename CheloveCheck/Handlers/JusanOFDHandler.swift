@@ -334,10 +334,10 @@ final class JusanOFDHandler: NSObject, OFDHandler {
     
     private func extractAmount(from text: String) -> Double {
         let cleanedText = text
-            .replacingOccurrences(of: "₸", with: "")   // Убираем валюту
+            .replacingOccurrences(of: "₸", with: "")
             .replacingOccurrences(of: "\u{00A0}", with: "")
-            .replacingOccurrences(of: " ", with: "")   // Убираем пробелы (разделители тысяч)
-            .replacingOccurrences(of: ",", with: ".")  // Заменяем запятую на точку
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: ",", with: ".")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         let value = Double(cleanedText) ?? 0.0

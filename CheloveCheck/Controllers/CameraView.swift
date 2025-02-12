@@ -1,3 +1,10 @@
+//
+//  SettingsViewController.swift
+//  CheloveCheck
+//
+//  Created by Sergey Ivanov on 10.01.2025.
+//
+
 import UIKit
 import AVFoundation
 
@@ -63,10 +70,10 @@ final class CameraView: UIView, AVCaptureMetadataOutputObjectsDelegate {
             guard let self = self else { return }
             
             self.captureSession = AVCaptureSession()
-            self.captureSession.beginConfiguration() // Начало конфигурации
+            self.captureSession.beginConfiguration()
 
             defer {
-                self.captureSession.commitConfiguration() // Завершение конфигурации
+                self.captureSession.commitConfiguration()
             }
             
             if self.captureSession.canSetSessionPreset(.hd1920x1080) {
@@ -122,7 +129,6 @@ final class CameraView: UIView, AVCaptureMetadataOutputObjectsDelegate {
         previewLayer.videoGravity = .resizeAspectFill
         layer.addSublayer(previewLayer)
         
-        // Убедимся, что overlayLayer остается поверх
         layer.addSublayer(overlayLayer)
         
         DispatchQueue.global(qos: .userInitiated).async {

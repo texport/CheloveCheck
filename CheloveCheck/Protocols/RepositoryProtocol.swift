@@ -1,6 +1,6 @@
 //
 //  RepositoryProtocol.swift
-//  Tandau
+//  CheloveCheck
 //
 //  Created by Sergey Ivanov on 10.01.2025.
 //

@@ -10,12 +10,14 @@
 		1C49BDEC2D2FC299003DB05A /* database.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 1C49BDEA2D2FC299003DB05A /* database.xcdatamodeld */; };
 		1C8F66FF2D2A8DE1005B639B /* ProgressHUD in Frameworks */ = {isa = PBXBuildFile; productRef = 1C8F66FE2D2A8DE1005B639B /* ProgressHUD */; };
 		1C8F670C2D2A9B0A005B639B /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 1C8F670B2D2A9B0A005B639B /* SwiftSoup */; };
+		1CA9D4DF2D5D05F900EBAD12 /* privacy_policy.md in Resources */ = {isa = PBXBuildFile; fileRef = 1CA9D4DE2D5D05F600EBAD12 /* privacy_policy.md */; };
 		1CCC1A582D54E3F10080036C /* retails.json in Resources */ = {isa = PBXBuildFile; fileRef = 1CCC1A572D54E3F10080036C /* retails.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		1C49BDEB2D2FC299003DB05A /* database.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = database.xcdatamodel; sourceTree = "<group>"; };
 		1C8E8A6A2D55FADC00E2FEB8 /* retails_new.xlsx */ = {isa = PBXFileReference; lastKnownFileType = file; path = retails_new.xlsx; sourceTree = "<group>"; };
+		1CA9D4DE2D5D05F600EBAD12 /* privacy_policy.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = privacy_policy.md; sourceTree = "<group>"; };
 		1CB3DC5E2D2A6BDC00D4C258 /* CheloveCheck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CheloveCheck.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1CCC1A572D54E3F10080036C /* retails.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = retails.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -65,6 +67,7 @@
 		1CB3DC552D2A6BDC00D4C258 = {
 			isa = PBXGroup;
 			children = (
+				1CA9D4DE2D5D05F600EBAD12 /* privacy_policy.md */,
 				1C8E8A692D55FAC300E2FEB8 /* Others */,
 				1C49BDEA2D2FC299003DB05A /* database.xcdatamodeld */,
 				1CCC1A542D54D8F00080036C /* Resoursces */,
@@ -160,6 +163,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1CCC1A582D54E3F10080036C /* retails.json in Resources */,
+				1CA9D4DF2D5D05F900EBAD12 /* privacy_policy.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -1,6 +1,6 @@
 //
 //  PaymentTypeEunm.swift
-//  Tandau
+//  CheloveCheck
 //
 //  Created by Sergey Ivanov on 09.01.2025.
 //

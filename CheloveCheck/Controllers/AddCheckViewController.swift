@@ -1,3 +1,10 @@
+//
+//  SettingsViewController.swift
+//  CheloveCheck
+//
+//  Created by Sergey Ivanov on 10.01.2025.
+//
+
 import UIKit
 import AVFoundation
 
