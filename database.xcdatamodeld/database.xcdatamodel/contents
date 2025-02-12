@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23507" systemVersion="24A335" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithSwiftData="YES" userDefinedModelVersionIdentifier="">
+    <entity name="ItemEntity" representedClassName="ItemEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="barcode" optional="YES" attributeType="String"/>
+        <attribute name="codeMark" optional="YES" attributeType="String"/>
+        <attribute name="count" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="name" attributeType="String"/>
+        <attribute name="price" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="sum" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="taxSum" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="taxType" optional="YES" attributeType="String"/>
+        <attribute name="unit" attributeType="String"/>
+        <relationship name="receipt" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ReceiptEntity" inverseName="items" inverseEntity="ReceiptEntity"/>
+    </entity>
+    <entity name="PaymentEntity" representedClassName="PaymentEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="sum" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="type" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="receipt" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ReceiptEntity" inverseName="payments" inverseEntity="ReceiptEntity"/>
+    </entity>
+    <entity name="ReceiptEntity" representedClassName="ReceiptEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="certificateVAT" optional="YES" attributeType="String"/>
+        <attribute name="change" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="companyAddress" attributeType="String"/>
+        <attribute name="companyName" attributeType="String"/>
+        <attribute name="dateTime" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="fiscalSign" attributeType="String"/>
+        <attribute name="iinBin" attributeType="String"/>
+        <attribute name="kgdId" attributeType="String"/>
+        <attribute name="ofd" attributeType="String"/>
+        <attribute name="serialNumber" optional="YES" attributeType="String"/>
+        <attribute name="taken" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="taxesSum" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="taxsesType" optional="YES" attributeType="String"/>
+        <attribute name="totalSum" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="typeOperation" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="url" attributeType="String"/>
+        <relationship name="items" toMany="YES" deletionRule="Cascade" destinationEntity="ItemEntity" inverseName="receipt" inverseEntity="ItemEntity"/>
+        <relationship name="payments" toMany="YES" deletionRule="Cascade" destinationEntity="PaymentEntity" inverseName="receipt" inverseEntity="PaymentEntity"/>
+    </entity>
+    <entity name="RetailEntity" representedClassName="RetailEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="bin" optional="YES" attributeType="String"/>
+        <attribute name="legalName" optional="YES" attributeType="String"/>
+        <attribute name="networkName" optional="YES" attributeType="String"/>
+    </entity>
+</model>
