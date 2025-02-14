@@ -17,6 +17,7 @@ enum AppError: Error {
     case databaseError(Error)
     case searchError(Error)
     case placeNotFound(String)
+    case pdfError(Error)
     
     // Ошибки для работы с камерой
     case cameraAccessDenied
@@ -59,6 +60,8 @@ enum AppError: Error {
             return "Не удалось удалить чек: \(error.localizedDescription)"
         case .placeNotFound(let string):
             return "Местоположение не найдено: \(string)"
+        case .pdfError(let error):
+            return "Ошибка при сохранении PDF: \(error.localizedDescription)"
         }
     }
 }

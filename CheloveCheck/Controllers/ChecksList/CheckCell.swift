@@ -126,8 +126,9 @@ final class CheckCell: UITableViewCell {
         formatter.numberStyle = .decimal
         formatter.locale = Locale(identifier: "ru_RU")
         formatter.groupingSeparator = " "
-        formatter.decimalSeparator = ""
-        formatter.maximumFractionDigits = 0
+        formatter.decimalSeparator = "."
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
         
         return formatter.string(from: NSNumber(value: amount)) ?? "\(Int(amount))"
     }

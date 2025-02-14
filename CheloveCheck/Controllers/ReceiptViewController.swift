@@ -62,9 +62,22 @@ final class ReceiptViewController: UIViewController {
             action: #selector(sharePDF)
         )
     }
-
+    
     @objc private func sharePDF() {
-        let activityVC = UIActivityViewController(activityItems: [pdfData!], applicationActivities: nil)
-        present(activityVC, animated: true, completion: nil)
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("receipt.pdf")
+        
+        do {
+            try pdfData.write(to: tempURL)
+            let activityVC = UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
+            present(activityVC, animated: true, completion: nil)
+        } catch {
+            showError(AppError.pdfError(error))
+        }
+    }
+    
+    private func showError(_ error: AppError) {
+        let alert = CustomAlertView.show(on: self, type: .error, title: "Ошибка!", message: error.message) { }
+        guard let parentView = self.view else { return }
+        alert.frame.origin.y = parentView.safeAreaInsets.top
     }
 }
