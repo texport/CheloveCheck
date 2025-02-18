@@ -132,6 +132,8 @@ final class JusanOFDHandler: NSObject, OFDHandler {
         print("📌 Адрес: \(reciept.companyAddress)")
         print("📌 Дата и время: \(reciept.dateTime)")
         print("📌 Фискальный признак: \(reciept.fiscalSign)")
+        print("📌 Серийный номер ККМ: \(reciept.serialNumber)")
+        print("📌 Регистрационный номер в КГД: \(reciept.kgdId)")
         print("📌 ИТОГО: \(reciept.totalSum) ₸")
         print("📌 Оплата: \(reciept.totalType.map { "\($0.type) - \($0.sum) ₸" }.joined(separator: ", "))")
         print("=================\n")
@@ -160,64 +162,123 @@ final class JusanOFDHandler: NSObject, OFDHandler {
     }
     
     private func extractCompanyName(from ticketArray: [[String: Any]]) -> String {
-        return (ticketArray.first?["text"] as? String ?? "Неизвестно").trimmingCharacters(in: .whitespacesAndNewlines)
+        var companyNameLines: [String] = []
+        
+        for entry in ticketArray {
+            guard let text = entry["text"] as? String else { continue }
+            
+            if text.contains("БСН/БИН") || text.contains("ИИН") {
+                break
+            }
+            
+            companyNameLines.append(text)
+        }
+        
+        return companyNameLines.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     private func extractIinBin(from ticketArray: [[String: Any]]) -> String {
-        guard ticketArray.indices.contains(1),
-              let text = ticketArray[1]["text"] as? String else { return "Неизвестно" }
-        return text.replacingOccurrences(of: "БСН/БИН", with: "")
-                   .replacingOccurrences(of: "ИИН", with: "")
-                   .trimmingCharacters(in: .whitespaces)
+        for entry in ticketArray {
+            guard let text = entry["text"] as? String else { continue }
+            
+            if text.contains("БСН/БИН") || text.contains("ИИН") {
+                return text.replacingOccurrences(of: "БСН/БИН", with: "")
+                           .replacingOccurrences(of: "ИИН", with: "")
+                           .trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return "Неизвестно"
     }
-
+    
     private func extractTypeOperation(from ticketArray: [[String: Any]]) -> OperationTypeEnum {
-        guard ticketArray.indices.contains(3),
-              let text = ticketArray[3]["text"] as? String else {
-            return .sell
+        var foundIinBin = false
+        
+        for entry in ticketArray {
+            guard let text = entry["text"] as? String else { continue }
+
+            if foundIinBin {
+                let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmedText.isEmpty {
+                    continue
+                }
+                
+                switch text {
+                case "Продажа":
+                    return .sell
+                case "Возврат", "Возврат продажи":
+                    return .sellReturn
+                case "Покупка":
+                    return .buy
+                case "Возврат покупки":
+                    return .buyReturn
+                default:
+                    return .sell
+                }
+            }
+            
+            if text.contains("БСН/БИН") || text.contains("ИИН") {
+                foundIinBin = true
+            }
         }
         
-        switch text {
-        case "Продажа":
-            return .sell
-        case "Возврат", "Возврат продажи":
-            return .sellReturn
-        case "Покупка":
-            return .buy
-        case "Возврат покупки":
-            return .buyReturn
-        default: return .sell
-        }
+        return .sell
     }
-
+    
     private func extractFiscalSign(from ticketArray: [[String: Any]]) -> String {
-        guard ticketArray.indices.contains(6),
-              let text = ticketArray[6]["text"] as? String else { return "" }
-        return text.components(separatedBy: ":").last?.trimmingCharacters(in: .whitespaces) ?? ""
-    }
+        for entry in ticketArray {
+            guard let text = entry["text"] as? String else { continue }
 
+            if text.contains("ФИСКАЛЬНЫЙ ПРИЗНАК") {
+                return text.components(separatedBy: ":").last?.trimmingCharacters(in: .whitespaces) ?? ""
+            }
+        }
+        return "Неизвестно"
+    }
+    
     private func extractDateTime(from ticketArray: [[String: Any]]) -> Date {
-        guard ticketArray.indices.contains(8),
-              let text = ticketArray[8]["text"] as? String else { return Date() }
+        let dateKeywords = ["Время", "Дата", "ДАТА", "ВРЕМЯ"]
         
-        let rawDate = text.components(separatedBy: ":").dropFirst().joined(separator: ":")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return convertDate(rawDate)
+        for entry in ticketArray {
+            guard let text = entry["text"] as? String else { continue }
+            
+            if dateKeywords.contains(where: { text.contains($0) }) {
+                let rawDate = text.components(separatedBy: ":").dropFirst().joined(separator: ":")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return convertDate(rawDate)
+            }
+        }
+        return Date()
     }
-
+    
     private func extractSerialNumber(from ticketArray: [[String: Any]]) -> String {
-        guard ticketArray.indices.contains(9),
-              let text = ticketArray[9]["text"] as? String else { return "" }
-        return text.components(separatedBy: "КЗН/ЗНМ").last?.trimmingCharacters(in: .whitespaces) ?? ""
-    }
+        for entry in ticketArray {
+            guard let text = entry["text"] as? String else { continue }
 
+            if text.contains("КЗН/ЗНМ") {
+                let afterKZN = text.components(separatedBy: "КЗН/ЗНМ").last ?? ""
+
+                if afterKZN.contains("КСН/ИНК") {
+                    return afterKZN.components(separatedBy: "КСН/ИНК").first?
+                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                } else {
+                    return afterKZN.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+        }
+        return "Неизвестно"
+    }
+    
     private func extractKgdId(from ticketArray: [[String: Any]]) -> String {
-        guard ticketArray.indices.contains(10),
-              let text = ticketArray[10]["text"] as? String else { return "" }
-        return text.components(separatedBy: "КТН/РНМ").last?.trimmingCharacters(in: .whitespaces) ?? ""
-    }
+        for entry in ticketArray {
+            guard let text = entry["text"] as? String else { continue }
 
+            if text.contains("КТН/РНМ") {
+                return text.components(separatedBy: "КТН/РНМ").last?.trimmingCharacters(in: .whitespaces) ?? ""
+            }
+        }
+        return "Неизвестно"
+    }
+    
     private func extractItems(from ticketArray: [[String: Any]]) -> ([Item], Int) {
         var items: [Item] = []
         var index = 0
@@ -384,10 +445,10 @@ final class JusanOFDHandler: NSObject, OFDHandler {
     
     private func convertDate(_ dateStr: String) -> Date {
         let formatter = DateFormatter()
-        formatter.dateFormat = "dd.MM.yyyy HH:mm:ss" // Формат даты, который приходит в JSON
+        formatter.dateFormat = "dd.MM.yyyy HH:mm:ss"
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
-
-        return formatter.date(from: dateStr) ?? Date() // Если не получилось - текущая дата
+        
+        return formatter.date(from: dateStr) ?? Date()
     }
     
     private func parseItem(name: String, countPriceSumText: String, taxText: String) -> Item {
