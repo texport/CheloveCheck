@@ -231,6 +231,12 @@ final class TranstelecomOFDHandler: NSObject, OFDHandler {
     private func parseItems(from elements: Elements) throws -> [Item] {
         return try elements.compactMap { element in
             do {
+                // Проверяем, есть ли тег <span class="wb-all"> (только у товаров)
+                guard (try element.select("span.wb-all").first()) != nil else {
+                    print("Пропущена строка, так как это не товар: \(try element.text())")
+                    return nil
+                }
+                
                 // Извлекаем имя товара
                 var name = try element.select("span.wb-all").text().trimmingCharacters(in: .whitespacesAndNewlines)
                 var barcode: String? = nil
