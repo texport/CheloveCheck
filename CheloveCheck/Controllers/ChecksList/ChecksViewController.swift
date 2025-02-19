@@ -808,11 +808,6 @@ extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDele
             datePicker.bottomAnchor.constraint(equalTo: alertController.view.bottomAnchor, constant: -50)
         ])
         
-//        let confirmAction = UIAlertAction(title: "Применить", style: .default) { _ in
-//            self.selectedFilter = "Выбрать период"
-//            self.applyCustomDateFilter(startDate: datePicker.date)
-//        }
-        
         let confirmAction = UIAlertAction(title: "Применить", style: .default) { _ in
             self.selectedFilter = "Выбрать период"
 
@@ -834,31 +829,6 @@ extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDele
         present(alertController, animated: true)
     }
     
-//    private func applyCustomDateFilter(startDate: Date) {
-//        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-//            guard let self = self else { return }
-//            
-//            let calendar = Calendar.current
-//            let startOfDay = calendar.startOfDay(for: startDate)
-//            guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return }
-//            
-//            let predicate = NSPredicate(format: "dateTime >= %@ AND dateTime < %@", startOfDay as NSDate, endOfDay as NSDate)
-//            do {
-//                var filteredResults = try self.repository.fetch(predicate: predicate)
-//                filteredResults.sort { $0.dateTime > $1.dateTime } // Сортировка от новых к старым
-//                DispatchQueue.main.async {
-//                    self.checks = filteredResults
-//                    self.updateUI()
-//                }
-//            } catch {
-//                DispatchQueue.main.async {
-//                    self.showError(.databaseError(error))
-//                    self.checks = []
-//                    self.updateUI()
-//                }
-//            }
-//        }
-//    }
     private func applyCustomDateFilter(startDate: Date, endDate: Date) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
