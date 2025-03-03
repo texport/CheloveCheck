@@ -164,13 +164,14 @@ final class KazakhtelecomOFDHandler: NSObject, URLSessionTaskDelegate, OFDHandle
         
         let itemsArray = items.compactMap { item -> Item? in
             guard let commodity = item["commodity"] as? [String: Any],
-                  let name = commodity["name"] as? String,
+                  let rawName = commodity["name"] as? String,
                   let quantity = commodity["quantity"] as? Double,
                   let price = commodity["price"] as? Double,
                   let sum = commodity["sum"] as? Double else {
                 return nil
             }
             
+            let name = rawName.replacingOccurrences(of: "\\r|\\n", with: "", options: .regularExpression)
             let barcode = commodity["barcode"] as? String
             let exciseStamp = commodity["exciseStamp"] as? String
             let measureUnitCodeRaw = commodity["measureUnitCode"] as? String
