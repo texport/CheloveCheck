@@ -284,8 +284,28 @@ final class JusanOFDHandler: NSObject, OFDHandler {
         var index = 0
 
         // Извлекаем сырые строки товаров в отдельный массив
-        var itemsRawData: [String] = []
+        let itemsRawData = extractRawItemsData(from: ticketArray, index: &index)
         
+        // Создаём массив массивов (структурируем сырые данные)
+        let structuredItems: [[String]] = extractItemsAndDiscounts(from: itemsRawData)
+        
+        // Передаём данные в parseItem
+        structuredItems.forEach { itemData in
+            let name = itemData[0]
+            let countPriceSumText = itemData[1]
+            let taxText = itemData[2].isEmpty ? nil : itemData[2]
+
+            let item = parseItem(name: name, countPriceSumText: countPriceSumText, taxText: taxText ?? "")
+            items.append(item)
+        }
+
+        return (items, index)
+    }
+    
+    // MARK: Достаем сырые позиции
+    private func extractRawItemsData(from ticketArray: [[String: Any]], index: inout Int) -> [String] {
+        var itemsRawData: [String] = []
+
         while index < ticketArray.count, let text = ticketArray[index]["text"] as? String {
             if text.contains("***********************************************") {
                 index += 1
@@ -303,40 +323,89 @@ final class JusanOFDHandler: NSObject, OFDHandler {
             index += 1
         }
 
-        // Создаём массив массивов (структурируем сырые данные)
-        var structuredItems: [[String]] = []
-        var i = 0
-
-        while i < itemsRawData.count {
-            let name = itemsRawData[i].trimmingCharacters(in: .whitespacesAndNewlines)
-
-            guard i + 1 < itemsRawData.count else { break }
-
-            let countPriceSumText = itemsRawData[i + 1]
-
-            // Проверяем, есть ли строка с НДС
-            let hasTax = (i + 2 < itemsRawData.count) && itemsRawData[i + 2].contains("НДС")
-            let taxText = hasTax ? itemsRawData[i + 2] : nil
-
-            structuredItems.append([name, countPriceSumText, taxText ?? ""])
-
-            // Переходим к следующему товару
-            i += hasTax ? 3 : 2
-        }
-
-        // Передаём данные в parseItem
-        structuredItems.forEach { itemData in
-            let name = itemData[0]
-            let countPriceSumText = itemData[1]
-            let taxText = itemData[2].isEmpty ? nil : itemData[2]
-
-            let item = parseItem(name: name, countPriceSumText: countPriceSumText, taxText: taxText ?? "")
-            items.append(item)
-        }
-
-        return (items, index)
+        return itemsRawData
     }
+    
+    private func extractItemsAndDiscounts(from itemsRawData: [String]) -> [[String]]{
+        var structuredItems: [[String]] = []
+        var index = 0
 
+        while index < itemsRawData.count {
+            let firstLine = itemsRawData[index].trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Если нашли "ЖЕҢІЛДІК" или "СКИДКА" — это скидки, выходим из цикла
+            if firstLine.contains("ЖЕҢІЛДІК/СКИДКА") || firstLine.contains("НАЦЕНКА") {
+                break
+            }
+            
+            var itemNameLines: [String] = []
+            
+            // Первая строка всегда часть названия товара
+            itemNameLines.append(itemsRawData[index].trimmingCharacters(in: .whitespacesAndNewlines))
+            index += 1
+
+            // Определяем, где заканчивается название товара
+            while index < itemsRawData.count {
+                let line = itemsRawData[index].trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if isQuantityPriceSumLine(line) {
+                    break
+                }
+
+                itemNameLines.append(line)
+                index += 1
+            }
+
+            let cleanedItemName = cleanItemName(itemNameLines.joined(separator: " "))
+            
+            // Нашли строку с количеством/ценой
+            let countPriceSumText = index < itemsRawData.count ? itemsRawData[index] : ""
+            index += 1
+
+            // Ищем строку с НДС
+            var taxText: String = ""
+            while index < itemsRawData.count {
+                let taxLine = itemsRawData[index].trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                if taxLine.contains("НДС") {
+                    taxText = taxLine
+                    index += 1
+                    break
+                }
+                index += 1
+            }
+            
+            // Добавляем найденную позицию в массив
+            structuredItems.append([
+                cleanedItemName,
+                countPriceSumText,
+                taxText
+            ])
+        }
+        print(structuredItems)
+        return structuredItems
+    }
+    
+    private func isQuantityPriceSumLine(_ text: String) -> Bool {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Должны присутствовать "x" и "₸" и строка должна начинаться с цифры
+        return trimmedText.contains("x") && trimmedText.contains("₸") && trimmedText.first?.isNumber == true
+    }
+    
+    private func cleanItemName(_ name: String) -> String {
+        let cleanedName = name
+            .replacingOccurrences(of: #"\"#, with: "")  // Удаляем все слэши `\`
+            .replacingOccurrences(of: #"\""#, with: "") // Удаляем двойные кавычки `"`
+            .replacingOccurrences(of: "|", with: "")    // Убираем разделители `|`
+            .replacingOccurrences(of: "*", with: "")    // Убираем звездочки `*`
+            .replacingOccurrences(of: "_", with: "")    // Убираем нижние подчеркивания `_`
+            .replacingOccurrences(of: "~", with: "")    // Убираем тильды `~`
+            .trimmingCharacters(in: .whitespacesAndNewlines) // Очищаем от лишних пробелов
+
+        return cleanedName
+    }
+    
     private func extractTotals(from ticketArray: [[String: Any]]) -> (Double?, [Payment], Double?, String?, Double?, Double) {
         var totalsRawData: [String] = []
         var index = 0
@@ -452,14 +521,16 @@ final class JusanOFDHandler: NSObject, OFDHandler {
     }
     
     private func parseItem(name: String, countPriceSumText: String, taxText: String) -> Item {
-        let countPattern = #"^(\d+)\s*\("#
+        let countPattern = #"^([\d.,]+)\s*\("#
         let unitPattern = #"\((.*?)\)"#
         let pricePattern = #"x\s*([\d\s]+,\d+)₸"#
         let sumPattern = #"=\s*([\d\s]+,\d+)₸"#
 
         let cleanedText = countPriceSumText.replacingOccurrences(of: "\u{00A0}", with: " ") // Убираем неразрывные пробелы
 
-        let count = extractMatch(from: cleanedText, using: countPattern).flatMap { Double($0) } ?? 0.0
+        let countText = extractMatch(from: cleanedText, using: countPattern)?
+                .replacingOccurrences(of: ",", with: ".") ?? "0.0"
+        let count = Double(countText) ?? 0.0
         let unitText = extractMatch(from: cleanedText, using: unitPattern) ?? "шт"
         let priceText = extractMatch(from: cleanedText, using: pricePattern)?
             .replacingOccurrences(of: " ", with: "")

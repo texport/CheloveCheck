@@ -25,8 +25,9 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
     // Репозиторий (предоставляет данные)
     private let repository: ReceiptRepository
     
-    private let filters = ["За неделю", "За месяц", "Выбрать период"]
+    private let filters = ["За неделю", "За месяц", "Выбрать дату"]
     private var selectedFilter: String?
+    private var selectedDateFilter: String?
     private var scrollTimer: Timer?
     
     private var topControlsHeightConstraint: NSLayoutConstraint!
@@ -726,12 +727,20 @@ extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDele
         guard let cell = collectionView.dequeueReusableCell(withReuseIdentifier: ChipCell.reuseIdentifier, for: indexPath) as? ChipCell else {
             return UICollectionViewCell()
         }
-        
-        let title = filters[indexPath.row]
+
+        var title = filters[indexPath.row]
+
+        if indexPath.row == 2, let dateFilter = selectedDateFilter {
+            title = dateFilter // Показываем дату, если она выбрана
+        }
+
         let showsChevron = (indexPath.row == 2) // Шеврон только у третьего чипса
+        let isSelected = (indexPath.row == 2 && selectedDateFilter != nil) ||
+                         (indexPath.row != 2 && selectedFilter == title)
+
         cell.configure(with: title, showsChevron: showsChevron)
-        cell.setSelected(title == selectedFilter, animated: false)
-        
+        cell.setSelected(isSelected, animated: false)
+
         return cell
     }
     
@@ -747,19 +756,23 @@ extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDele
         let feedbackGenerator = UIImpactFeedbackGenerator(style: .light)
         feedbackGenerator.prepare()
         feedbackGenerator.impactOccurred()
-        
-        if selectedFilter == selectedTitle {
-            selectedFilter = nil
-            loadData(reset: true)
+
+        if indexPath.row == 2 {
+            // Если нажали "Выбрать дату", показываем DatePicker
+            showDatePicker()
         } else {
-            selectedFilter = selectedTitle
-            if selectedTitle == "Выбрать период" {
-                showDatePicker()
+            if selectedFilter == selectedTitle {
+                // Если повторно нажали на уже выбранный фильтр — сбрасываем его
+                selectedFilter = nil
+                loadData(reset: true)
             } else {
+                // Если выбрали новый фильтр — сбрасываем дату и применяем фильтр
+                selectedFilter = selectedTitle
+                selectedDateFilter = nil
                 applyFilter()
             }
         }
-        
+
         collectionView.reloadData()
     }
     
@@ -792,7 +805,7 @@ extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDele
     }
     
     private func showDatePicker() {
-        let alertController = UIAlertController(title: "Выберите период", message: nil, preferredStyle: .alert)
+        let alertController = UIAlertController(title: "Выберите дату", message: nil, preferredStyle: .alert)
         let datePicker = UIDatePicker()
         datePicker.datePickerMode = .date
         datePicker.locale = Locale(identifier: "ru_RU")
@@ -800,65 +813,61 @@ extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDele
         datePicker.maximumDate = Calendar.current.startOfDay(for: Date())
         alertController.view.addSubview(datePicker)
         datePicker.translatesAutoresizingMaskIntoConstraints = false
-        
+
         NSLayoutConstraint.activate([
             datePicker.leadingAnchor.constraint(equalTo: alertController.view.leadingAnchor, constant: 20),
             datePicker.trailingAnchor.constraint(equalTo: alertController.view.trailingAnchor, constant: -20),
             datePicker.topAnchor.constraint(equalTo: alertController.view.topAnchor, constant: 50),
             datePicker.bottomAnchor.constraint(equalTo: alertController.view.bottomAnchor, constant: -50)
         ])
-        
-//        let confirmAction = UIAlertAction(title: "Применить", style: .default) { _ in
-//            self.selectedFilter = "Выбрать период"
-//            self.applyCustomDateFilter(startDate: datePicker.date)
-//        }
-        
+
         let confirmAction = UIAlertAction(title: "Применить", style: .default) { _ in
-            self.selectedFilter = "Выбрать период"
-
-            let calendar = Calendar.current
-            let startOfDay = calendar.startOfDay(for: datePicker.date)
-            let endOfDay = calendar.startOfDay(for: Date()) // Сегодняшний день
-
-            self.applyCustomDateFilter(startDate: startOfDay, endDate: endOfDay)
+            let formatter = DateFormatter()
+            formatter.dateFormat = "dd.MM.yyyy"
+            formatter.locale = Locale(identifier: "ru_RU")
+            self.selectedDateFilter = formatter.string(from: datePicker.date)
+            self.selectedFilter = nil // Сбрасываем обычный фильтр
+            self.applyDateFilter(for: datePicker.date)
+            self.filtersCollectionView.reloadData()
         }
-        
+
         let cancelAction = UIAlertAction(title: "Отмена", style: .cancel) { _ in
-            self.selectedFilter = nil
+            self.selectedDateFilter = nil
             self.filtersCollectionView.reloadData()
             self.loadData(reset: true)
         }
-        
+
         alertController.addAction(confirmAction)
         alertController.addAction(cancelAction)
         present(alertController, animated: true)
     }
     
-//    private func applyCustomDateFilter(startDate: Date) {
-//        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-//            guard let self = self else { return }
-//            
-//            let calendar = Calendar.current
-//            let startOfDay = calendar.startOfDay(for: startDate)
-//            guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return }
-//            
-//            let predicate = NSPredicate(format: "dateTime >= %@ AND dateTime < %@", startOfDay as NSDate, endOfDay as NSDate)
-//            do {
-//                var filteredResults = try self.repository.fetch(predicate: predicate)
-//                filteredResults.sort { $0.dateTime > $1.dateTime } // Сортировка от новых к старым
-//                DispatchQueue.main.async {
-//                    self.checks = filteredResults
-//                    self.updateUI()
-//                }
-//            } catch {
-//                DispatchQueue.main.async {
-//                    self.showError(.databaseError(error))
-//                    self.checks = []
-//                    self.updateUI()
-//                }
-//            }
-//        }
-//    }
+    private func applyDateFilter(for date: Date) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+
+            let calendar = Calendar.current
+            let startOfDay = calendar.startOfDay(for: date)
+            guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return }
+
+            let predicate = NSPredicate(format: "dateTime >= %@ AND dateTime < %@", startOfDay as NSDate, endOfDay as NSDate)
+
+            do {
+                let results = try self.repository.fetch(predicate: predicate)
+                DispatchQueue.main.async {
+                    self.checks = results
+                    self.updateUI()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.showError(.databaseError(error))
+                    self.checks = []
+                    self.updateUI()
+                }
+            }
+        }
+    }
+    
     private func applyCustomDateFilter(startDate: Date, endDate: Date) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
