@@ -23,39 +23,35 @@ final class ReceiptRepository: RepositoryProtocol {
         return try context.count(for: request)
     }
     
-    func fetchPaged(offset: Int, limit: Int, predicate: NSPredicate? = nil) throws -> [Receipt] {
-        let request: NSFetchRequest<ReceiptEntity> = ReceiptEntity.fetchRequest()
-        
-        // Добавляем фильтр, если он передан
-        request.predicate = predicate
-        
-        // Сортируем по дате, сначала самые свежие
-        request.sortDescriptors = [NSSortDescriptor(key: "dateTime", ascending: false)]
-        
-        // Указываем порцию данных
-        request.fetchOffset = offset
-        request.fetchLimit = limit
-        
-        // Выполняем запрос
-        let entities = try context.fetch(request)
-        
-        // Преобразуем в доменные модели
-        return try entities.map { try $0.toDomainModel() }
+    func fetch(request: FetchRequest, completion: @escaping ([Receipt]) -> Void) {
+        context.perform {
+            do {
+                let fetchRequest: NSFetchRequest<ReceiptEntity> = ReceiptEntity.fetchRequest()
+                fetchRequest.predicate = request.predicate
+                fetchRequest.fetchOffset = request.offset
+                fetchRequest.fetchLimit = request.limit
+                fetchRequest.sortDescriptors = request.sortDescriptors
+                
+                let entities = try self.context.fetch(fetchRequest)
+                let receipts = try entities.map { try $0.toDomainModel() }
+                
+                DispatchQueue.main.async {
+                    completion(receipts)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion([])
+                }
+            }
+        }
     }
-
+    
     func fetchAll() throws -> [Receipt] {
         let request: NSFetchRequest<ReceiptEntity> = ReceiptEntity.fetchRequest()
         let entities = try context.fetch(request)
         return try entities.map { try $0.toDomainModel() }
     }
-
-    func fetch(predicate: NSPredicate?) throws -> [Receipt] {
-        let request: NSFetchRequest<ReceiptEntity> = ReceiptEntity.fetchRequest()
-        request.predicate = predicate
-        let entities = try context.fetch(request)
-        return try entities.map { try $0.toDomainModel() }
-    }
-
+    
     func save(_ receipt: Receipt) throws {
         // Проверяем, существует ли уже чек с таким же фискальным признаком
         let fetchRequest: NSFetchRequest<ReceiptEntity> = ReceiptEntity.fetchRequest()
