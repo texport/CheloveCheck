@@ -1,0 +1,101 @@
+//
+//  FiltersManager.swift
+//  CheloveCheck
+//
+//  Created by Sergey Ivanov on 03.03.2025.
+//
+
+import Foundation
+
+protocol FiltersManagerDelegate: AnyObject {
+    func didUpdateChecks(_ checks: [Receipt])
+}
+
+final class FiltersManager {
+    private let repository: ReceiptRepository
+    private(set) var activeFilter: CheckFilterProtocol
+    private var currentOffset: Int = 0
+    private let fetchLimit: Int = 50
+    private var hasMoreData: Bool = true
+    private var searchQuery: String? = nil
+    var selectedDateFilter: DateFilter?
+    weak var delegate: FiltersManagerDelegate?
+    
+    var availableFilters: [CheckFilterProtocol] {
+        let filters: [CheckFilterProtocol] = [
+            AllChecksFilter(),
+            LastWeekFilter(),
+            LastMonthFilter(),
+            selectedDateFilter ?? PlaceholderDateFilter()
+        ]
+        return filters
+    }
+    
+    init(repository: ReceiptRepository, defaultFilter: CheckFilterProtocol = AllChecksFilter()) {
+        self.repository = repository
+        self.activeFilter = defaultFilter
+    }
+    
+    func applyFilter(_ filter: CheckFilterProtocol) {
+        print("🔍 Устанавливаем фильтр: \(filter.title)")
+        
+        if let dateFilter = filter as? DateFilter {
+            selectedDateFilter = dateFilter
+        } else if filter is PlaceholderDateFilter {
+            return // Если выбрали "Выбрать дату", ничего не делаем
+        }
+        
+        activeFilter = filter
+        searchQuery = nil
+        delegate?.didUpdateChecks([])
+        resetPagination()
+        fetchNextPage()
+    }
+
+    func applyDateFilter(for date: Date) {
+        let dateFilter = DateFilter(date: date)
+        selectedDateFilter = dateFilter
+        print("📅 Применён фильтр даты: \(dateFilter.title)")
+        applyFilter(dateFilter)
+    }
+    
+    func clearDateFilter() {
+        selectedDateFilter = nil
+        applyFilter(AllChecksFilter())
+    }
+    
+    func applySearch(_ query: String?) {
+        searchQuery = query
+        delegate?.didUpdateChecks([])
+        resetPagination()
+        fetchNextPage()
+    }
+    
+    func fetchNextPage() {
+        guard hasMoreData else { return }
+
+        var request = FetchRequest(offset: currentOffset, limit: fetchLimit)
+        activeFilter.apply(to: &request)
+        request.searchQuery = searchQuery
+        request.addSearchPredicate()
+
+        repository.fetch(request: request) { [weak self] results in
+            guard let self = self else { return }
+
+            if results.isEmpty {
+                self.hasMoreData = false
+                return
+            }
+
+            self.currentOffset += results.count
+            self.hasMoreData = results.count == self.fetchLimit // Если загрузили меньше лимита, значит, данных больше нет
+            
+            self.delegate?.didUpdateChecks(results)
+        }
+    }
+    
+    private func resetPagination() {
+        currentOffset = 0
+        hasMoreData = true
+    }
+}

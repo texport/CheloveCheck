@@ -87,7 +87,8 @@ final class TranstelecomOFDHandler: NSObject, OFDHandler {
 
         // Настраиваем форматтер
         dateFormatter.locale = Locale(identifier: "ru_RU")
-        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        dateFormatter.timeZone = TimeZone(identifier: "Asia/Almaty")
+        
         dateFormatter.dateFormat = "dd MM yyyy, HH:mm"
 
         // Конвертируем строку в дату

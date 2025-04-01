@@ -526,7 +526,7 @@ final class JusanOFDHandler: NSObject, OFDHandler {
     private func convertDate(_ dateStr: String) -> Date {
         let formatter = DateFormatter()
         formatter.dateFormat = "dd.MM.yyyy HH:mm:ss"
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.timeZone = TimeZone(identifier: "Asia/Almaty")
         
         return formatter.date(from: dateStr) ?? Date()
     }
