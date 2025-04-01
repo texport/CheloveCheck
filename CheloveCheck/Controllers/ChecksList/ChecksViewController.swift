@@ -602,20 +602,66 @@ extension ChecksViewController: CheckCellDelegate {
         }
     }
     
+//    private func openMap(with address: String) {
+//        let searchRequest = MKLocalSearch.Request()
+//        searchRequest.naturalLanguageQuery = address
+//
+//        let search = MKLocalSearch(request: searchRequest)
+//        search.start { (response, error) in
+//            guard let coordinate = response?.mapItems.first?.placemark.coordinate else {
+//                self.showError(.placeNotFound(address))
+//                return
+//            }
+//
+//            let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+//            mapItem.name = address
+//            mapItem.openInMaps()
+//        }
+//    }
+    
     private func openMap(with address: String) {
-        let searchRequest = MKLocalSearch.Request()
-        searchRequest.naturalLanguageQuery = address
+        let raw = UserDefaults.standard.string(forKey: "selectedMapProvider")
+        let provider = MapProvider(rawValue: raw ?? "") ?? .apple
+        let encoded = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? address
 
-        let search = MKLocalSearch(request: searchRequest)
-        search.start { (response, error) in
-            guard let coordinate = response?.mapItems.first?.placemark.coordinate else {
-                self.showError(.placeNotFound(address))
-                return
+        switch provider {
+        case .apple:
+            let searchRequest = MKLocalSearch.Request()
+            searchRequest.naturalLanguageQuery = address
+            let search = MKLocalSearch(request: searchRequest)
+            search.start { (response, error) in
+                guard let coordinate = response?.mapItems.first?.placemark.coordinate else {
+                    self.showError(.placeNotFound(address))
+                    return
+                }
+                let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+                mapItem.name = address
+                mapItem.openInMaps()
             }
 
-            let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
-            mapItem.name = address
-            mapItem.openInMaps()
+        case .yandex:
+            if let appURL = URL(string: "yandexmaps://maps.yandex.ru/?text=\(encoded)"),
+               UIApplication.shared.canOpenURL(appURL) {
+                UIApplication.shared.open(appURL)
+            } else if let webURL = URL(string: "https://yandex.ru/maps/?text=\(encoded)") {
+                UIApplication.shared.open(webURL)
+            }
+
+        case .google:
+            if let appURL = URL(string: "comgooglemaps://?q=\(encoded)"),
+               UIApplication.shared.canOpenURL(appURL) {
+                UIApplication.shared.open(appURL)
+            } else if let webURL = URL(string: "https://www.google.com/maps/search/?api=1&query=\(encoded)") {
+                UIApplication.shared.open(webURL)
+            }
+
+        case .dgis:
+            if let appURL = URL(string: "dgis://2gis.ru/search/\(encoded)"),
+               UIApplication.shared.canOpenURL(appURL) {
+                UIApplication.shared.open(appURL)
+            } else if let webURL = URL(string: "https://2gis.kz/search/\(encoded)") {
+                UIApplication.shared.open(webURL)
+            }
         }
     }
 }

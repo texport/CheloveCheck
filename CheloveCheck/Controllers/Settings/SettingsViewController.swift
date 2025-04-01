@@ -53,6 +53,27 @@ final class SettingsViewController: UITableViewController {
         dataSource.apply(snapshot, animatingDifferences: true)
     }
     
+    private func presentMapProviderPicker() {
+        let alert = UIAlertController(title: "Выберите провайдер карт", message: nil, preferredStyle: .actionSheet)
+
+        let providers: [(title: String, provider: MapProvider)] = [
+            ("Apple Карты", .apple),
+            ("Яндекс Карты", .yandex),
+            ("Google Карты", .google),
+            ("2ГИС", .dgis)
+        ]
+
+        providers.forEach { entry in
+            alert.addAction(UIAlertAction(title: entry.title, style: .default) { _ in
+                UserDefaults.standard.setValue(entry.provider.rawValue, forKey: "selectedMapProvider")
+                self.applySnapshot()
+            })
+        }
+
+        alert.addAction(UIAlertAction(title: "Отмена", style: .cancel))
+        present(alert, animated: true)
+    }
+    
     override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
         guard let header = tableView.dequeueReusableHeaderFooterView(withIdentifier: "Header") else {
             return nil
@@ -66,8 +87,15 @@ final class SettingsViewController: UITableViewController {
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        if let item = dataSource.itemIdentifier(for: indexPath), let url = item.url {
-            UIApplication.shared.open(url)
+        
+        if let item = dataSource.itemIdentifier(for: indexPath) {
+            if let url = item.url {
+                UIApplication.shared.open(url)
+            }
+
+            if item.title.contains("Провайдер карт") {
+                presentMapProviderPicker()
+            }
         }
     }
 }
