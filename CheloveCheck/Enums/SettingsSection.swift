@@ -8,7 +8,7 @@
 import Foundation
 
 enum SettingsSection: Int, CaseIterable, Hashable {
-    case support, team, about, sourceCode
+    case support, team, about, navigation, sourceCode
 
     var title: String {
         switch self {
@@ -18,6 +18,8 @@ enum SettingsSection: Int, CaseIterable, Hashable {
             return "Команда"
         case .about:
             return "О Программе"
+        case .navigation:
+            return "Навигация"
         case .sourceCode:
             return "Исходный код"
         }
@@ -34,7 +36,13 @@ enum SettingsSection: Int, CaseIterable, Hashable {
             ]
         case .about:
             return [
-                SettingsItem(title: "Версия: 1.6.0", url: nil, iconName: "about")
+                SettingsItem(title: "Версия приложения: 1.6.0", url: nil, iconName: "about")
+            ]
+        case .navigation:
+            let raw = UserDefaults.standard.string(forKey: "selectedMapProvider")
+            let provider = MapProvider(rawValue: raw ?? "") ?? .apple
+            return [
+                SettingsItem(title: "Провайдер карт: \(provider.rawValue)", url: nil, iconName: "map")
             ]
         case .sourceCode:
             return [SettingsItem(title: "Исходный код на GitHub", url: URL(string: "https://github.com/texport/CheloveCheck"), iconName: "github")]
