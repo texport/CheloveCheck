@@ -66,7 +66,7 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
         collectionView.dataSource = self
         collectionView.delegate = self
         collectionView.translatesAutoresizingMaskIntoConstraints = false
-        collectionView.showsHorizontalScrollIndicator = true
+        collectionView.showsHorizontalScrollIndicator = false
         collectionView.isScrollEnabled = true // Включить прокрутку
         collectionView.alwaysBounceHorizontal = true // Добавить bounce-эффект при достижении конца
         
@@ -152,6 +152,7 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
         super.viewDidLoad()
         
         setupUI()
+        updatePlaceholderIfDatabaseIsEmpty()
         
         searchBar.delegate = self
         tableView.delegate = self
@@ -273,9 +274,18 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
     private func updateUI() {
         let isEmpty = checks.isEmpty
         tableView.isHidden = isEmpty
-        placeholderViewMain.isHidden = !isEmpty
+        updatePlaceholderIfDatabaseIsEmpty()
         
         tableView.reloadData()
+    }
+    
+    private func updatePlaceholderIfDatabaseIsEmpty() {
+        do {
+            let totalCount = try repository.count()
+            placeholderViewMain.isHidden = totalCount > 0
+        } catch {
+            placeholderViewMain.isHidden = true
+        }
     }
     
     private func showError(_ error: AppError) {
@@ -421,6 +431,8 @@ extension ChecksViewController: UITableViewDelegate {
         feedbackGenerator.prepare()
         feedbackGenerator.impactOccurred()
         
+        Loader.show()
+        
         // Анимация сжатия ячейки
         UIView.animate(withDuration: 0.1, animations: {
             cell.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
@@ -431,8 +443,6 @@ extension ChecksViewController: UITableViewDelegate {
             }, completion: { _ in
                 tableView.deselectRow(at: indexPath, animated: false)
                 
-                // Показываем Loader и переходим к ReceiptViewController
-                Loader.show()
                 let receipt = self.checks[indexPath.row]
                 let receiptVC = ReceiptViewController(receipt: receipt, shouldShowSuccessAlert: false)
                 let navController = UINavigationController(rootViewController: receiptVC)
@@ -513,7 +523,6 @@ extension ChecksViewController: UISearchBarDelegate {
     
     func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
         searchBar.setShowsCancelButton(true, animated: true)
-        filtersCollectionView.reloadData()
         
         // Обновляем констрейнт trailing
         UIView.animate(withDuration: 0.25) {
