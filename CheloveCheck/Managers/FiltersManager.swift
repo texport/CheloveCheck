@@ -24,6 +24,7 @@ final class FiltersManager {
     var availableFilters: [CheckFilterProtocol] {
         let filters: [CheckFilterProtocol] = [
             AllChecksFilter(),
+            TodayFilter(),
             LastWeekFilter(),
             LastMonthFilter(),
             selectedDateFilter ?? PlaceholderDateFilter()
@@ -39,10 +40,15 @@ final class FiltersManager {
     func applyFilter(_ filter: CheckFilterProtocol) {
         print("🔍 Устанавливаем фильтр: \(filter.title)")
         
+        // Сохраняем фильтр, если он дата-фильтр
         if let dateFilter = filter as? DateFilter {
             selectedDateFilter = dateFilter
         } else if filter is PlaceholderDateFilter {
-            return // Если выбрали "Выбрать дату", ничего не делаем
+                return // Если "Выбрать дату", просто показываем пикер — ничего не делаем
+        } else {
+            // Сброс даты, если выбран любой другой фильтр
+            selectedDateFilter = nil
+            
         }
         
         activeFilter = filter

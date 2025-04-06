@@ -251,7 +251,7 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
             searchBar.heightAnchor.constraint(equalToConstant: 36),
             
             filtersCollectionView.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
-            filtersCollectionView.leadingAnchor.constraint(equalTo: topControlsContainer.leadingAnchor, constant: 5),
+            filtersCollectionView.leadingAnchor.constraint(equalTo: topControlsContainer.leadingAnchor, constant: 16),
             filtersCollectionView.trailingAnchor.constraint(equalTo: topControlsContainer.trailingAnchor, constant: -5),
             filtersCollectionView.bottomAnchor.constraint(equalTo: topControlsContainer.bottomAnchor),
             filtersCollectionView.heightAnchor.constraint(equalToConstant: 44),
@@ -628,23 +628,6 @@ extension ChecksViewController: CheckCellDelegate {
         }
     }
     
-//    private func openMap(with address: String) {
-//        let searchRequest = MKLocalSearch.Request()
-//        searchRequest.naturalLanguageQuery = address
-//
-//        let search = MKLocalSearch(request: searchRequest)
-//        search.start { (response, error) in
-//            guard let coordinate = response?.mapItems.first?.placemark.coordinate else {
-//                self.showError(.placeNotFound(address))
-//                return
-//            }
-//
-//            let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
-//            mapItem.name = address
-//            mapItem.openInMaps()
-//        }
-//    }
-    
     private func openMap(with address: String) {
         let raw = UserDefaults.standard.string(forKey: "selectedMapProvider")
         let provider = MapProvider(rawValue: raw ?? "") ?? .apple
@@ -713,9 +696,7 @@ extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDele
         let filter = filtersManager.availableFilters[indexPath.row]
         let isSelected = filtersManager.activeFilter.title == filter.title
 
-        let showsChevron = filter is PlaceholderDateFilter // Показываем шеврон только у "Выбрать дату"
-
-        cell.configure(with: filter.title, showsChevron: showsChevron)
+        cell.configure(with: filter.title)
         cell.setSelected(isSelected, animated: false)
 
         return cell
@@ -723,8 +704,7 @@ extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDele
     
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         let filter = filtersManager.availableFilters[indexPath.row]
-        let minimumWidth: CGFloat? = filter is PlaceholderDateFilter ? 152 : nil // Минимальная ширина для кнопки "Выбрать дату"
-        return ChipCell.calculateSize(for: filter.title, showsChevron: filter is PlaceholderDateFilter, minimumWidth: minimumWidth)
+        return ChipCell.calculateSize(for: filter.title)
     }
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
