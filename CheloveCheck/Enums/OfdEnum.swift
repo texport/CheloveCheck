@@ -5,7 +5,7 @@
 //  Created by Sergey Ivanov on 09.01.2025.
 //
 
-enum OfdEnum: String, CaseIterable {
+enum OfdEnum: String, CaseIterable, Codable {
     case kazakhtelecom = "1"
     case transtelecom = "2"
     case kofd = "3"

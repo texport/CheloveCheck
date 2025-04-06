@@ -21,7 +21,7 @@ import Foundation
 /// print(info.nameRus) // "Килограмм"
 /// print(info.shortKaz) // "кг"
 /// ```
-public enum UnitOfMeasurementEnum: String, CaseIterable {
+public enum UnitOfMeasurementEnum: String, CaseIterable, Codable {
     case piece = "796"
     case kilogram = "116"
     case service = "5114"

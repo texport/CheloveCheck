@@ -115,10 +115,10 @@ final class CustomAlertView: UIView {
             backgroundView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             // Алерт
-            alertView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            alertView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            alertView.topAnchor.constraint(equalTo: topAnchor),
-
+            alertView.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor),
+            alertView.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor),
+            alertView.topAnchor.constraint(equalTo: safeAreaLayoutGuide.topAnchor),
+            
             // Заголовок
             titleLabel.topAnchor.constraint(equalTo: alertView.topAnchor, constant: 16),
             titleLabel.leadingAnchor.constraint(equalTo: alertView.leadingAnchor, constant: 16),
@@ -193,10 +193,23 @@ final class CustomAlertView: UIView {
     }
     
     // MARK: - Show Alert
+    @discardableResult
     static func show(on viewController: UIViewController, type: AlertType, title: String, message: String, onClose: @escaping () -> Void) -> CustomAlertView {
         let alert = CustomAlertView(type: type, title: title, message: message, onClose: onClose)
-        alert.frame = viewController.view.bounds
-        viewController.view.addSubview(alert)
+        
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first(where: { $0.isKeyWindow }) {
+            alert.translatesAutoresizingMaskIntoConstraints = false
+            window.addSubview(alert)
+            
+            NSLayoutConstraint.activate([
+                alert.topAnchor.constraint(equalTo: window.safeAreaLayoutGuide.topAnchor),
+                alert.leadingAnchor.constraint(equalTo: window.leadingAnchor),
+                alert.trailingAnchor.constraint(equalTo: window.trailingAnchor),
+                alert.bottomAnchor.constraint(equalTo: window.bottomAnchor)
+            ])
+        }
+        
         return alert
     }
     
