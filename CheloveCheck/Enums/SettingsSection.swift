@@ -41,7 +41,7 @@ enum SettingsSection: Int, CaseIterable, Hashable {
             ]
         case .about:
             return [
-                SettingsItem(title: "Версия приложения: 1.6.0", url: nil, iconName: "info.circle")
+                SettingsItem(title: "Версия приложения: 1.6.0_rc1", url: nil, iconName: "info.circle")
             ]
         case .navigation:
             let raw = UserDefaults.standard.string(forKey: "selectedMapProvider")
