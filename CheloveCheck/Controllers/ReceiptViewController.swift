@@ -56,11 +56,27 @@ final class ReceiptViewController: UIViewController {
 
     private func setupNavigationBar() {
         navigationItem.title = "Чек"
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            image: UIImage(systemName: "xmark"),
+            style: .plain,
+            target: self,
+            action: #selector(closeScreen)
+        )
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .action,
             target: self,
             action: #selector(sharePDF)
         )
+    }
+    
+    @objc private func closeScreen() {
+        if let presentingVC = presentingViewController {
+            presentingVC.dismiss(animated: true, completion: nil)
+        } else if let navigationController = navigationController {
+            navigationController.popViewController(animated: true)
+        } else {
+            self.showError(.failedToCloseScreen)
+        }
     }
     
     @objc private func sharePDF() {

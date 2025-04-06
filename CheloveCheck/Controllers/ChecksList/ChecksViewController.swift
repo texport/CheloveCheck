@@ -235,8 +235,6 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
         tapGesture.cancelsTouchesInView = false
         tableView.addGestureRecognizer(tapGesture)
         
-        tableView.showsVerticalScrollIndicator = false
-
         searchBarTrailingConstraint = searchBar.trailingAnchor.constraint(equalTo: topControlsContainer.trailingAnchor, constant: -16)
         
         NSLayoutConstraint.activate([
