@@ -145,6 +145,8 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
     
     deinit {
         NotificationCenter.default.removeObserver(self, name: .newCheckAdded, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .receiptsDidChange, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .receiptsDidImport, object: nil)
     }
     
     // MARK: - Жизненный цикл
@@ -166,6 +168,20 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
             self,
             selector: #selector(handleNewCheckAdded(_:)),
             name: .newCheckAdded,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleReceiptsDidChange),
+            name: .receiptsDidChange,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleReceiptsDidImport),
+            name: .receiptsDidImport,
             object: nil
         )
         
@@ -386,6 +402,16 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
             checks.sort { $0.dateTime > $1.dateTime }
             updateUI()
         }
+    }
+    
+    @objc private func handleReceiptsDidChange() {
+        filtersManager.fetchNextPage()
+        updateUI()
+    }
+    
+    @objc private func handleReceiptsDidImport() {
+        filtersManager.fetchNextPage()
+        updateUI()
     }
 }
 

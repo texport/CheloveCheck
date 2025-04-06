@@ -11,6 +11,7 @@ final class ReceiptRepository: RepositoryProtocol {
     typealias DomainModel = Receipt
 
     private let context: NSManagedObjectContext
+    static let shared = ReceiptRepository(context: CoreDataManager.shared.context)
 
     init(context: NSManagedObjectContext) {
         self.context = context
@@ -70,7 +71,7 @@ final class ReceiptRepository: RepositoryProtocol {
             try context.save()
         }
     }
-
+    
     func delete(_ receipt: Receipt) throws {
         let fetchRequest: NSFetchRequest<ReceiptEntity> = ReceiptEntity.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "fiscalSign == %@", receipt.fiscalSign)
@@ -90,5 +91,12 @@ final class ReceiptRepository: RepositoryProtocol {
         if context.hasChanges {
             try context.save()
         }
+    }
+    
+    func deleteAll() throws {
+        let fetchRequest: NSFetchRequest<NSFetchRequestResult> = ReceiptEntity.fetchRequest()
+        let deleteRequest = NSBatchDeleteRequest(fetchRequest: fetchRequest)
+        try context.execute(deleteRequest)
+        try context.save()
     }
 }

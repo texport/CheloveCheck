@@ -28,12 +28,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         
         // Конфигурация ProgressHUD
         Loader.configure()
-        
+        print("👀 Тема из UserDefaults:", ThemeManager.current.rawValue)
         let window = UIWindow(windowScene: windowScene)
         let tabBarController = MainTabBarController()
         window.rootViewController = tabBarController
         window.makeKeyAndVisible()
-        
+        ThemeManager.applyCurrentTheme()
         self.window = window
     }
 

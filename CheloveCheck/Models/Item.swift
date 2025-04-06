@@ -7,7 +7,7 @@
 
 import CoreData
 
-struct Item {
+struct Item: Codable {
     let barcode: String?
     let codeMark: String?
     let name: String

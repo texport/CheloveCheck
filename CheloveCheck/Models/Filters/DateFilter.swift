@@ -22,17 +22,27 @@ struct DateFilter: CheckFilterProtocol {
 
         // Берём локальное начало дня
         let localStartOfDay = calendar.startOfDay(for: date)
+        
+        // Конец дня — 23:59:59
         guard let localEndOfDay = calendar.date(byAdding: .day, value: 1, to: localStartOfDay)?.addingTimeInterval(-1) else {
-            print("❌ Ошибка: не удалось вычислить конец дня")
             return
         }
 
+        // Применяем предикат
         request.predicate = NSPredicate(
             format: "dateTime >= %@ AND dateTime <= %@",
             localStartOfDay as NSDate, localEndOfDay as NSDate
         )
 
-        print("⏳ Фильтруем чеки (локально) с \(localStartOfDay) по \(localEndOfDay)")
+        // Форматируем дату для логов
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss ZZZZ"
+        formatter.timeZone = TimeZone.current
+
+        let startStr = formatter.string(from: localStartOfDay)
+        let endStr = formatter.string(from: localEndOfDay)
+
+        print("⏳ Фильтруем чеки (локально) с \(startStr) по \(endStr)")
     }
 }
 

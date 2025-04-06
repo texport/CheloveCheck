@@ -14,6 +14,8 @@ final class SettingsTableViewCell: UITableViewCell {
         let iv = UIImageView()
         iv.tintColor = .label
         iv.translatesAutoresizingMaskIntoConstraints = false
+        iv.layer.cornerRadius = 7
+        iv.clipsToBounds = true
         return iv
     }()
     
@@ -33,8 +35,8 @@ final class SettingsTableViewCell: UITableViewCell {
         NSLayoutConstraint.activate([
             iconImageView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             iconImageView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            iconImageView.widthAnchor.constraint(equalToConstant: 24),
-            iconImageView.heightAnchor.constraint(equalToConstant: 24),
+            iconImageView.widthAnchor.constraint(equalToConstant: 30),
+            iconImageView.heightAnchor.constraint(equalToConstant: 30),
             
             titleLabel.leadingAnchor.constraint(equalTo: iconImageView.trailingAnchor, constant: 12),
             titleLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
@@ -52,10 +54,22 @@ final class SettingsTableViewCell: UITableViewCell {
     
     func configure(with item: SettingsItem) {
         titleLabel.text = item.title
+        print("⚙️ configure: item = \(item.title)")
+
         if let iconName = item.iconName {
-            iconImageView.image = UIImage(named: iconName)
+            print("🔍 iconName: \(iconName)")
+            if let image = UIImage(named: iconName) {
+                print("📦 Используем кастомную иконку: \(iconName)")
+                iconImageView.image = image
+            } else if let systemImage = UIImage(systemName: iconName) {
+                print("🖼 Используем SF Symbol: \(iconName)")
+                iconImageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(scale: .medium)
+                iconImageView.image = systemImage
+            } else {
+                print("❌ Иконка не найдена: \(iconName)")
+            }
         }
-        
+
         accessoryType = item.url != nil ? .disclosureIndicator : .none
     }
 }
