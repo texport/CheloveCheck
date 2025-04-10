@@ -8,7 +8,7 @@
 import Foundation
 
 protocol FiltersManagerDelegate: AnyObject {
-    func didUpdateChecks(_ checks: [Receipt])
+    func didUpdateChecks(_ checks: [Receipt], append: Bool)
 }
 
 final class FiltersManager {
@@ -53,7 +53,7 @@ final class FiltersManager {
         
         activeFilter = filter
         searchQuery = nil
-        delegate?.didUpdateChecks([])
+        delegate?.didUpdateChecks([], append: false)
         resetPagination()
         fetchNextPage()
     }
@@ -72,7 +72,7 @@ final class FiltersManager {
     
     func applySearch(_ query: String?) {
         searchQuery = query
-        delegate?.didUpdateChecks([])
+        delegate?.didUpdateChecks([], append: false)
         resetPagination()
         fetchNextPage()
     }
@@ -96,8 +96,13 @@ final class FiltersManager {
             self.currentOffset += results.count
             self.hasMoreData = results.count == self.fetchLimit // Если загрузили меньше лимита, значит, данных больше нет
             
-            self.delegate?.didUpdateChecks(results)
+            self.delegate?.didUpdateChecks(results, append: self.currentOffset > results.count)
         }
+    }
+    
+    func refreshCurrentFilter() {
+        resetPagination()
+        fetchNextPage()
     }
     
     private func resetPagination() {

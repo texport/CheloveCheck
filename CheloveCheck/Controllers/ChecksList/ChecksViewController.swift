@@ -395,11 +395,12 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
     }
     
     @objc private func handleNewCheckAdded(_ notification: Notification) {
-        if let newCheck = notification.object as? Receipt {
-            checks.insert(newCheck, at: 0)
-            checks.sort { $0.dateTime > $1.dateTime }
-            updateUI()
-        }
+//        if let newCheck = notification.object as? Receipt {
+//            checks.insert(newCheck, at: 0)
+//            checks.sort { $0.dateTime > $1.dateTime }
+//            updateUI()
+//        }
+        filtersManager.refreshCurrentFilter()
     }
     
     @objc private func handleReceiptsDidChange() {
@@ -411,13 +412,25 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
         filtersManager.fetchNextPage()
         updateUI()
     }
+    
+    func scrollToTop() {
+        guard checks.count > 0 else { return }
+        tableView.setContentOffset(.zero, animated: true)
+    }
 }
 
 // MARK: Делегат FiltersManagerDelegate
 extension ChecksViewController: FiltersManagerDelegate {
-    func didUpdateChecks(_ checks: [Receipt]) {
+    func didUpdateChecks(_ checks: [Receipt], append: Bool) {
         print("✅ Обновляем UI. Чеков загружено: \(checks.count)")
-        self.checks = checks
+//        self.checks = checks
+        
+        if append {
+            self.checks.append(contentsOf: checks)
+        } else {
+            self.checks = checks
+        }
+        
         updateUI()
     }
 }

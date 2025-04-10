@@ -285,7 +285,8 @@ extension SettingsViewController: UIDocumentPickerDelegate {
 
         // Обрабатываем файл
         controller.dismiss(animated: true) {
-            Loader.show()
+            //Loader.show()
+            Loader.showProgress(message: "Импорт чеков: 0%", progress: 0.0)
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     let data = try Data(contentsOf: tempURL)
@@ -293,17 +294,47 @@ extension SettingsViewController: UIDocumentPickerDelegate {
                     decoder.dateDecodingStrategy = .iso8601
                     let receipts = try decoder.decode([Receipt].self, from: data)
 
-                    var imported: [Receipt] = []
-                    var skipped: [Receipt] = []
+                    //var imported: [Receipt] = []
+                    //var skipped: [Receipt] = []
 
-                    for receipt in receipts {
-                        do {
-                            try ReceiptRepository.shared.save(receipt)
-                            imported.append(receipt)
-                        } catch {
-                            skipped.append(receipt)
+//                    for receipt in receipts {
+//                        do {
+//                            try ReceiptRepository.shared.save(receipt)
+//                            imported.append(receipt)
+//                        } catch {
+//                            skipped.append(receipt)
+//                        }
+//                    }
+//                    for (index, receipt) in receipts.enumerated() {
+//                        do {
+//                            try ReceiptRepository.shared.save(receipt)
+//                            imported.append(receipt)
+//                        } catch {
+//                            skipped.append(receipt)
+//                        }
+//
+//                        // Обновляем прогресс каждые 500 чеков или в самом конце
+//                        if index % 500 == 0 || index == receipts.count - 1 {
+//                            let progress = Float(index + 1) / Float(receipts.count)
+//                            let percent = Int(progress * 100)
+//                            DispatchQueue.main.async {
+//                                Loader.showProgress(message: "Импорт чеков: \(percent)%", progress: progress)
+//                            }
+//                        }
+//                    }
+
+                    let result = try ReceiptRepository.shared.saveMany(
+                        receipts,
+                        chunkSize: 10000,
+                        progress: { percent, progress in
+                            DispatchQueue.main.async {
+                                Loader.showProgress(message: "Импорт чеков: \(percent)%", progress: progress)
+                            }
                         }
-                    }
+                    )
+
+                    let imported = result.imported
+                    let skipped = result.skipped
 
                     try? FileManager.default.removeItem(at: tempURL)
 
@@ -322,6 +353,28 @@ extension SettingsViewController: UIDocumentPickerDelegate {
                                                      message: message) {}
                             }
                         }
+                    }
+                } catch let decodingError as DecodingError {
+                    DispatchQueue.main.async {
+                        Loader.dismiss()
+                        var message = ""
+                        switch decodingError {
+                        case .dataCorrupted(let context):
+                            message = "dataCorrupted: \(context.debugDescription)"
+                        case .keyNotFound(let key, let context):
+                            message = "keyNotFound: \(key.stringValue) – \(context.debugDescription)"
+                        case .typeMismatch(let type, let context):
+                            message = "typeMismatch: \(type) – \(context.debugDescription)"
+                        case .valueNotFound(let value, let context):
+                            message = "valueNotFound: \(value) – \(context.debugDescription)"
+                        @unknown default:
+                            message = decodingError.localizedDescription
+                        }
+                        
+                        CustomAlertView.show(on: self,
+                                             type: .error,
+                                             title: "Ошибка",
+                                             message: message) {}
                     }
                 } catch {
                     DispatchQueue.main.async {
