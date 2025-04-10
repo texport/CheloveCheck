@@ -12,18 +12,13 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
     // Флаги состояния
     private var isFetching: Bool = false
     private var hasMoreData: Bool = true
-    private var isTopControlsHidden: Bool = false
     
     // Основной массив данных
     private var checks: [Receipt] = []
     private let repository: ReceiptRepository
     private let filtersManager: FiltersManager
-    private var scrollTimer: Timer?
     
-    private var topControlsHeightConstraint: NSLayoutConstraint!
-    private let topControlsDesiredHeight: CGFloat = 80
     private var searchBarTrailingConstraint: NSLayoutConstraint!
-    private var tableViewTopConstraint: NSLayoutConstraint!
     
     // MARK: - UI Elements
     private lazy var topControlsContainer: UIView = {
@@ -147,6 +142,7 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
         NotificationCenter.default.removeObserver(self, name: .newCheckAdded, object: nil)
         NotificationCenter.default.removeObserver(self, name: .receiptsDidChange, object: nil)
         NotificationCenter.default.removeObserver(self, name: .receiptsDidImport, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .receiptsDidDeleteAll, object: nil)
     }
     
     // MARK: - Жизненный цикл
@@ -185,17 +181,14 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
             object: nil
         )
         
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleReceiptsDidDeleteAll),
+            name: .receiptsDidDeleteAll,
+            object: nil
+        )
+        
         filtersManager.fetchNextPage()
-    }
-    
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        startScrollingAnimation()
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        stopScrollingAnimation()
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -225,12 +218,6 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
         placeholderViewSecond.addSubview(placeholderLabel)
         placeholderViewSecond.addSubview(placeholderDescription)
         
-        topControlsHeightConstraint = topControlsContainer.heightAnchor.constraint(
-            equalToConstant: topControlsDesiredHeight
-        )
-        
-        tableViewTopConstraint = tableView.topAnchor.constraint(equalTo: topControlsContainer.bottomAnchor)
-        
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         tapGesture.cancelsTouchesInView = false
         tableView.addGestureRecognizer(tapGesture)
@@ -241,7 +228,6 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
             topControlsContainer.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             topControlsContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topControlsContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            topControlsHeightConstraint,
             
             searchBar.topAnchor.constraint(equalTo: topControlsContainer.topAnchor),
             searchBar.leadingAnchor.constraint(equalTo: topControlsContainer.leadingAnchor, constant: 10),
@@ -254,7 +240,7 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
             filtersCollectionView.bottomAnchor.constraint(equalTo: topControlsContainer.bottomAnchor),
             filtersCollectionView.heightAnchor.constraint(equalToConstant: 44),
             
-            tableViewTopConstraint,
+            tableView.topAnchor.constraint(equalTo: topControlsContainer.bottomAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -343,44 +329,6 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
         return button
     }
     
-    private func startScrollingAnimation() {
-        scrollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            let visibleItems = self.filtersCollectionView.indexPathsForVisibleItems.sorted()
-            
-            // Найдём текущий индекс последнего видимого элемента
-            guard let lastVisibleIndexPath = visibleItems.last else { return }
-
-            // Рассчитаем следующий индекс
-            let nextIndex = lastVisibleIndexPath.item + 1
-
-            // Если дошли до конца, возвращаемся к началу
-            let nextIndexPath: IndexPath
-            
-            if nextIndex < self.filtersManager.availableFilters.count {
-                nextIndexPath = IndexPath(item: nextIndex, section: 0)
-            } else {
-                nextIndexPath = IndexPath(item: 0, section: 0)
-            }
-            
-            // Прокручиваем к следующему элементу
-            self.filtersCollectionView.scrollToItem(at: nextIndexPath, at: .centeredHorizontally, animated: true)
-        }
-    }
-    
-    private func stopScrollingAnimation() {
-        scrollTimer?.invalidate()
-        scrollTimer = nil
-    }
-    
-    private func showFilters(_ show: Bool) {
-        UIView.animate(withDuration: 0.25) {
-            self.filtersCollectionView.alpha = show ? 1 : 0
-            self.filtersCollectionView.isUserInteractionEnabled = show
-            self.filtersCollectionView.isHidden = !show
-        }
-    }
-    
     // MARK: - Actions
     @objc private func addCheck() {
         let addVC = AddCheckViewController(repository: repository)
@@ -395,11 +343,6 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
     }
     
     @objc private func handleNewCheckAdded(_ notification: Notification) {
-//        if let newCheck = notification.object as? Receipt {
-//            checks.insert(newCheck, at: 0)
-//            checks.sort { $0.dateTime > $1.dateTime }
-//            updateUI()
-//        }
         filtersManager.refreshCurrentFilter()
     }
     
@@ -409,7 +352,18 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
     }
     
     @objc private func handleReceiptsDidImport() {
+        print("Произошла загрузка новых чеков, обновляю UI")
+        filtersManager.resetAll()
+        searchBar.text = ""
+        filtersManager.applySearch(nil)
         filtersManager.fetchNextPage()
+        updateUI()
+    }
+    
+    @objc private func handleReceiptsDidDeleteAll() {
+        print("Произошло удаление всех чеков, отчищаю UI, удаляю все чеки")
+        filtersManager.resetAll()
+        checks.removeAll()
         updateUI()
     }
     
@@ -423,7 +377,6 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
 extension ChecksViewController: FiltersManagerDelegate {
     func didUpdateChecks(_ checks: [Receipt], append: Bool) {
         print("✅ Обновляем UI. Чеков загружено: \(checks.count)")
-//        self.checks = checks
         
         if append {
             self.checks.append(contentsOf: checks)
@@ -432,6 +385,7 @@ extension ChecksViewController: FiltersManagerDelegate {
         }
         
         updateUI()
+        Loader.dismiss()
     }
 }
 
@@ -495,38 +449,13 @@ extension ChecksViewController: UITableViewDelegate {
     }
     
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView === tableView else { return }
         guard checks.count >= 5 else { return }
 
-        let offsetY = scrollView.contentOffset.y
-
-        if offsetY > 20, !isTopControlsHidden {
-            isTopControlsHidden = true
-            UIView.animate(withDuration: 0.25, animations: {
-                self.topControlsContainer.alpha = 0
-                self.topControlsContainer.isUserInteractionEnabled = false
-                self.searchBar.isHidden = true
-                self.filtersCollectionView.isHidden = true
-
-                // Изменяем констрейнт таблицы
-                self.tableViewTopConstraint.constant = -self.topControlsDesiredHeight
-                self.view.layoutIfNeeded()
-            })
-        } else if offsetY <= 0, isTopControlsHidden {
-            isTopControlsHidden = false
-            UIView.animate(withDuration: 0.25, animations: {
-                self.topControlsContainer.alpha = 1
-                self.topControlsContainer.isUserInteractionEnabled = true
-                self.searchBar.isHidden = false
-                self.filtersCollectionView.isHidden = false
-
-                // Возвращаем констрейнт таблицы
-                self.tableViewTopConstraint.constant = 0
-                self.view.layoutIfNeeded()
-            })
-        }
-        
         let contentHeight = scrollView.contentSize.height
         let scrollHeight = scrollView.frame.size.height
+        let offsetY = scrollView.contentOffset.y
+
         if offsetY > contentHeight - scrollHeight - 100 {
             filtersManager.fetchNextPage()
         }
@@ -549,17 +478,17 @@ extension ChecksViewController: UISearchBarDelegate {
         if searchText.isEmpty {
             // Если строка поиска пуста, сбрасываем результаты и показываем все
             filtersManager.applySearch(nil) // Очистка поиска
-            showFilters(true) // Показываем фильтры
             return
         }
-        
-        // Если есть текст в поиске, скрываем фильтры и применяем поиск
-        showFilters(false)
+        Loader.show()
         filtersManager.applySearch(searchText)
     }
     
     func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
         searchBar.setShowsCancelButton(true, animated: true)
+        
+        filtersManager.applyFilter(AllChecksFilter())
+        filtersCollectionView.reloadData()
         
         // Обновляем констрейнт trailing
         UIView.animate(withDuration: 0.25) {
@@ -591,7 +520,6 @@ extension ChecksViewController: UISearchBarDelegate {
             self.view.layoutIfNeeded()
         }
         
-        showFilters(true) // Показываем фильтры
         filtersManager.applySearch(nil) // Очистка поиска
     }
 }
@@ -625,15 +553,6 @@ extension ChecksViewController: CheckCellDelegate {
             checks.remove(at: indexPath.row)
             tableView.deleteRows(at: [indexPath], with: .automatic)
             updateUI()
-
-            // Показываем контейнер, если чеков осталось меньше 5
-            if checks.count < 5 {
-                isTopControlsHidden = false
-                UIView.animate(withDuration: 0.25) {
-                    self.topControlsHeightConstraint.constant = self.topControlsDesiredHeight
-                    self.view.layoutIfNeeded()
-                }
-            }
         } catch {
             showError(.failedToDeleteReceipt(error))
         }
@@ -724,6 +643,10 @@ extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDele
         feedbackGenerator.prepare()
         feedbackGenerator.impactOccurred()
 
+        searchBar.text = ""
+        searchBar.setShowsCancelButton(false, animated: true)
+        searchBar.resignFirstResponder()
+        
         if selectedFilter is PlaceholderDateFilter || selectedFilter is DateFilter {
             showDatePicker() // Всегда открываем DatePicker
         } else {

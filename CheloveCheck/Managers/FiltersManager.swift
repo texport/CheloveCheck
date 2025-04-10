@@ -18,6 +18,7 @@ final class FiltersManager {
     private let fetchLimit: Int = 50
     private var hasMoreData: Bool = true
     private var searchQuery: String? = nil
+    private var searchDebounceWorkItem: DispatchWorkItem?
     var selectedDateFilter: DateFilter?
     weak var delegate: FiltersManagerDelegate?
     
@@ -71,10 +72,21 @@ final class FiltersManager {
     }
     
     func applySearch(_ query: String?) {
-        searchQuery = query
-        delegate?.didUpdateChecks([], append: false)
-        resetPagination()
-        fetchNextPage()
+        // Отменяем предыдущую задачу, если пользователь быстро печатает
+        searchDebounceWorkItem?.cancel()
+        
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.searchQuery = query
+            self.delegate?.didUpdateChecks([], append: false)
+            self.resetPagination()
+            self.fetchNextPage()
+        }
+        
+        // Сохраняем, чтобы можно было отменить
+        searchDebounceWorkItem = workItem
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
     }
     
     func fetchNextPage() {
@@ -103,6 +115,13 @@ final class FiltersManager {
     func refreshCurrentFilter() {
         resetPagination()
         fetchNextPage()
+    }
+    
+    func resetAll() {
+        searchQuery = nil
+        selectedDateFilter = nil
+        activeFilter = AllChecksFilter()
+        resetPagination()
     }
     
     private func resetPagination() {

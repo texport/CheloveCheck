@@ -38,7 +38,7 @@ final class ChipCell: UICollectionViewCell {
         contentView.layer.borderColor = UIColor(resource: .filters).cgColor
 
         NSLayoutConstraint.activate([
-            contentView.heightAnchor.constraint(equalToConstant: 28),
+            //contentView.heightAnchor.constraint(equalToConstant: 28),
 
             titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
             titleLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
@@ -70,6 +70,7 @@ final class ChipCell: UICollectionViewCell {
     static func calculateSize(for title: String) -> CGSize {
         let textWidth = title.size(withAttributes: [.font: UIFont.systemFont(ofSize: 14)]).width
         let padding: CGFloat = 24
-        return CGSize(width: textWidth + padding, height: 28)
+        let height: CGFloat = 28
+        return CGSize(width: textWidth + padding, height: height)
     }
 }

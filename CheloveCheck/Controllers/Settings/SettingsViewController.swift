@@ -157,7 +157,7 @@ final class SettingsViewController: UITableViewController {
 
                         DispatchQueue.main.async {
                             Loader.dismiss()
-                            NotificationCenter.default.post(name: .receiptsDidChange, object: nil)
+                            NotificationCenter.default.post(name: .receiptsDidDeleteAll, object: nil)
                             
                             CustomAlertView.show(on: self,
                                                  type: .success,
@@ -285,7 +285,6 @@ extension SettingsViewController: UIDocumentPickerDelegate {
 
         // Обрабатываем файл
         controller.dismiss(animated: true) {
-            //Loader.show()
             Loader.showProgress(message: "Импорт чеков: 0%", progress: 0.0)
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
@@ -293,35 +292,6 @@ extension SettingsViewController: UIDocumentPickerDelegate {
                     let decoder = JSONDecoder()
                     decoder.dateDecodingStrategy = .iso8601
                     let receipts = try decoder.decode([Receipt].self, from: data)
-
-                    //var imported: [Receipt] = []
-                    //var skipped: [Receipt] = []
-
-//                    for receipt in receipts {
-//                        do {
-//                            try ReceiptRepository.shared.save(receipt)
-//                            imported.append(receipt)
-//                        } catch {
-//                            skipped.append(receipt)
-//                        }
-//                    }
-//                    for (index, receipt) in receipts.enumerated() {
-//                        do {
-//                            try ReceiptRepository.shared.save(receipt)
-//                            imported.append(receipt)
-//                        } catch {
-//                            skipped.append(receipt)
-//                        }
-//
-//                        // Обновляем прогресс каждые 500 чеков или в самом конце
-//                        if index % 500 == 0 || index == receipts.count - 1 {
-//                            let progress = Float(index + 1) / Float(receipts.count)
-//                            let percent = Int(progress * 100)
-//                            DispatchQueue.main.async {
-//                                Loader.showProgress(message: "Импорт чеков: \(percent)%", progress: progress)
-//                            }
-//                        }
-//                    }
 
                     let result = try ReceiptRepository.shared.saveMany(
                         receipts,

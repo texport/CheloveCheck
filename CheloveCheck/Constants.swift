@@ -10,5 +10,6 @@ import UIKit
 extension Notification.Name {
     static let receiptsDidChange = Notification.Name("receiptsDidChange")
     static let receiptsDidImport = Notification.Name("receiptsDidImport")
+    static let receiptsDidDeleteAll = Notification.Name("receiptsDidDeleteAll")
     static let newCheckAdded = Notification.Name("newCheckAdded")
 }
