@@ -72,6 +72,68 @@ final class ReceiptRepository: RepositoryProtocol {
         }
     }
     
+    func saveMany(
+        _ receipts: [Receipt],
+        chunkSize: Int = 10000,
+        progress: ((Int, Float) -> Void)? = nil
+    ) throws -> (imported: [Receipt], skipped: [Receipt]) {
+        let backgroundContext = CoreDataManager.shared.backgroundContext
+
+        var imported: [Receipt] = []
+        var skipped: [Receipt] = []
+
+        try backgroundContext.performAndWait {
+            // Шаг 1. Предзагрузка всех фискальных признаков
+            let request: NSFetchRequest<NSFetchRequestResult> = ReceiptEntity.fetchRequest()
+            request.resultType = .dictionaryResultType
+            request.propertiesToFetch = ["fiscalSign"]
+
+            let results = try backgroundContext.fetch(request)
+            let existingFiscalSigns = Set(results.compactMap { ($0 as? NSDictionary)?["fiscalSign"] as? String })
+
+            // Шаг 2. Импорт по чанкам
+            let total = receipts.count
+            var processed = 0
+            var lastPercent = 0
+            let progressStep = 2
+
+            for chunk in receipts.chunked(into: chunkSize).enumerated() {
+                for receipt in chunk.element {
+                    if !existingFiscalSigns.contains(receipt.fiscalSign) {
+                        _ = receipt.toEntity(context: backgroundContext)
+                        imported.append(receipt)
+                    } else {
+                        skipped.append(receipt)
+                    }
+
+                    processed += 1
+
+                    let currentProgress = Float(processed) / Float(total)
+                    let percent = Int(currentProgress * 100)
+
+                    if percent >= lastPercent + progressStep || percent == 100 {
+                        lastPercent = percent
+                        progress?(percent, currentProgress)
+                    }
+                }
+
+                // Шаг 3. Сохраняем каждую вторую пачку
+                if chunk.offset % 2 == 0 && backgroundContext.hasChanges {
+                    try backgroundContext.save()
+                    backgroundContext.reset()
+                }
+            }
+
+            // Финальное сохранение
+            if backgroundContext.hasChanges {
+                try backgroundContext.save()
+                backgroundContext.reset()
+            }
+        }
+
+        return (imported, skipped)
+    }
+    
     func delete(_ receipt: Receipt) throws {
         let fetchRequest: NSFetchRequest<ReceiptEntity> = ReceiptEntity.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "fiscalSign == %@", receipt.fiscalSign)
@@ -98,5 +160,13 @@ final class ReceiptRepository: RepositoryProtocol {
         let deleteRequest = NSBatchDeleteRequest(fetchRequest: fetchRequest)
         try context.execute(deleteRequest)
         try context.save()
+    }
+}
+
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        stride(from: 0, to: count, by: size).map {
+            Array(self[$0..<Swift.min($0 + size, count)])
+        }
     }
 }

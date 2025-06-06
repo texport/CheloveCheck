@@ -15,7 +15,11 @@ final class CoreDataManager {
             fatalError("Не удалось инициализировать CoreDataManager: \(error.localizedDescription)")
         }
     }()
-
+    
+    var backgroundContext: NSManagedObjectContext {
+        return persistentContainer.newBackgroundContext()
+    }
+    
     private let persistentContainer: NSPersistentContainer
 
     private init() throws {

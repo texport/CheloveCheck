@@ -73,6 +73,14 @@ final class MainTabBarController: UITabBarController, UITabBarControllerDelegate
         return true
     }
     
+    func tabBarController(_ tabBarController: UITabBarController, didSelect viewController: UIViewController) {
+        if selectedIndex == 0,
+           let navController = viewController as? UINavigationController,
+           let checksVC = navController.viewControllers.first as? ChecksViewController {
+            checksVC.scrollToTop()
+        }
+    }
+    
     // MARK: - Модальное представление
     private func presentAddCheckScreen() {
         let addVC = AddCheckViewController(repository: receiptRepository)
