@@ -363,23 +363,34 @@ final class JusanOFDHandler: NSObject, OFDHandler {
             index += 1
 
             // Ищем строку с НДС
-            var taxText: String = ""
-            while index < itemsRawData.count {
+//            var taxText: String = ""
+//            while index < itemsRawData.count {
+//                let taxLine = itemsRawData[index].trimmingCharacters(in: .whitespacesAndNewlines)
+//                
+//                if taxLine.contains("НДС") {
+//                    taxText = taxLine
+//                    index += 1
+//                    break
+//                }
+//                index += 1
+//            }
+            
+            // Проверяем, есть ли НДС (может отсутствовать)
+            var taxText: String? = nil
+            if index < itemsRawData.count {
                 let taxLine = itemsRawData[index].trimmingCharacters(in: .whitespacesAndNewlines)
                 
                 if taxLine.contains("НДС") {
                     taxText = taxLine
                     index += 1
-                    break
                 }
-                index += 1
             }
             
             // Добавляем найденную позицию в массив
             structuredItems.append([
                 cleanedItemName,
                 countPriceSumText,
-                taxText
+                taxText ?? ""
             ])
         }
         print(structuredItems)
@@ -515,7 +526,7 @@ final class JusanOFDHandler: NSObject, OFDHandler {
     private func convertDate(_ dateStr: String) -> Date {
         let formatter = DateFormatter()
         formatter.dateFormat = "dd.MM.yyyy HH:mm:ss"
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.timeZone = TimeZone(identifier: "Asia/Almaty")
         
         return formatter.date(from: dateStr) ?? Date()
     }

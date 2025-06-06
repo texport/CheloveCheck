@@ -217,7 +217,3 @@ final class AddCheckViewController: UIViewController {
         }
     }
 }
-
-extension Notification.Name {
-    static let newCheckAdded = Notification.Name("newCheckAdded")
-}

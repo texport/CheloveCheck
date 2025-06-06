@@ -9,31 +9,16 @@ import UIKit
 import MapKit
 
 final class ChecksViewController: UIViewController, UICollectionViewDelegate {
-
-    // Параметры пагинации
-    private var currentOffset: Int = 0
-    private let fetchLimit: Int = 50
-    
     // Флаги состояния
     private var isFetching: Bool = false
     private var hasMoreData: Bool = true
-    private var isTopControlsHidden: Bool = false
     
     // Основной массив данных
     private var checks: [Receipt] = []
-    
-    // Репозиторий (предоставляет данные)
     private let repository: ReceiptRepository
+    private let filtersManager: FiltersManager
     
-    private let filters = ["За неделю", "За месяц", "Выбрать дату"]
-    private var selectedFilter: String?
-    private var selectedDateFilter: String?
-    private var scrollTimer: Timer?
-    
-    private var topControlsHeightConstraint: NSLayoutConstraint!
-    private let topControlsDesiredHeight: CGFloat = 80
     private var searchBarTrailingConstraint: NSLayoutConstraint!
-    private var tableViewTopConstraint: NSLayoutConstraint!
     
     // MARK: - UI Elements
     private lazy var topControlsContainer: UIView = {
@@ -76,7 +61,7 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
         collectionView.dataSource = self
         collectionView.delegate = self
         collectionView.translatesAutoresizingMaskIntoConstraints = false
-        collectionView.showsHorizontalScrollIndicator = true
+        collectionView.showsHorizontalScrollIndicator = false
         collectionView.isScrollEnabled = true // Включить прокрутку
         collectionView.alwaysBounceHorizontal = true // Добавить bounce-эффект при достижении конца
         
@@ -144,7 +129,9 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
     // MARK: - Инициализация
     init(repository: ReceiptRepository) {
         self.repository = repository
+        self.filtersManager = FiltersManager(repository: repository)
         super.init(nibName: nil, bundle: nil)
+        filtersManager.delegate = self
     }
     
     required init?(coder: NSCoder) {
@@ -153,6 +140,9 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
     
     deinit {
         NotificationCenter.default.removeObserver(self, name: .newCheckAdded, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .receiptsDidChange, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .receiptsDidImport, object: nil)
+        NotificationCenter.default.removeObserver(self, name: .receiptsDidDeleteAll, object: nil)
     }
     
     // MARK: - Жизненный цикл
@@ -160,6 +150,7 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
         super.viewDidLoad()
         
         setupUI()
+        updatePlaceholderIfDatabaseIsEmpty()
         
         searchBar.delegate = self
         tableView.delegate = self
@@ -176,17 +167,28 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
             object: nil
         )
         
-        loadData()
-    }
-    
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        startScrollingAnimation()
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        stopScrollingAnimation()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleReceiptsDidChange),
+            name: .receiptsDidChange,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleReceiptsDidImport),
+            name: .receiptsDidImport,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleReceiptsDidDeleteAll),
+            name: .receiptsDidDeleteAll,
+            object: nil
+        )
+        
+        filtersManager.fetchNextPage()
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -216,25 +218,16 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
         placeholderViewSecond.addSubview(placeholderLabel)
         placeholderViewSecond.addSubview(placeholderDescription)
         
-        topControlsHeightConstraint = topControlsContainer.heightAnchor.constraint(
-            equalToConstant: topControlsDesiredHeight
-        )
-        
-        tableViewTopConstraint = tableView.topAnchor.constraint(equalTo: topControlsContainer.bottomAnchor)
-        
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         tapGesture.cancelsTouchesInView = false
         tableView.addGestureRecognizer(tapGesture)
         
-        tableView.showsVerticalScrollIndicator = false
-
         searchBarTrailingConstraint = searchBar.trailingAnchor.constraint(equalTo: topControlsContainer.trailingAnchor, constant: -16)
         
         NSLayoutConstraint.activate([
             topControlsContainer.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             topControlsContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             topControlsContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            topControlsHeightConstraint,
             
             searchBar.topAnchor.constraint(equalTo: topControlsContainer.topAnchor),
             searchBar.leadingAnchor.constraint(equalTo: topControlsContainer.leadingAnchor, constant: 10),
@@ -242,12 +235,12 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
             searchBar.heightAnchor.constraint(equalToConstant: 36),
             
             filtersCollectionView.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
-            filtersCollectionView.leadingAnchor.constraint(equalTo: topControlsContainer.leadingAnchor, constant: 5),
+            filtersCollectionView.leadingAnchor.constraint(equalTo: topControlsContainer.leadingAnchor, constant: 16),
             filtersCollectionView.trailingAnchor.constraint(equalTo: topControlsContainer.trailingAnchor, constant: -5),
             filtersCollectionView.bottomAnchor.constraint(equalTo: topControlsContainer.bottomAnchor),
             filtersCollectionView.heightAnchor.constraint(equalToConstant: 44),
             
-            tableViewTopConstraint,
+            tableView.topAnchor.constraint(equalTo: topControlsContainer.bottomAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -281,9 +274,18 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
     private func updateUI() {
         let isEmpty = checks.isEmpty
         tableView.isHidden = isEmpty
-        placeholderViewMain.isHidden = !isEmpty
+        updatePlaceholderIfDatabaseIsEmpty()
         
         tableView.reloadData()
+    }
+    
+    private func updatePlaceholderIfDatabaseIsEmpty() {
+        do {
+            let totalCount = try repository.count()
+            placeholderViewMain.isHidden = totalCount > 0
+        } catch {
+            placeholderViewMain.isHidden = true
+        }
     }
     
     private func showError(_ error: AppError) {
@@ -327,84 +329,6 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
         return button
     }
     
-    private func startScrollingAnimation() {
-        // Убедимся, что есть хотя бы один элемент
-        guard !filters.isEmpty else { return }
-
-        scrollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            let visibleItems = self.filtersCollectionView.indexPathsForVisibleItems.sorted()
-            
-            // Найдём текущий индекс последнего видимого элемента
-            guard let lastVisibleIndexPath = visibleItems.last else { return }
-
-            // Рассчитаем следующий индекс
-            let nextIndex = lastVisibleIndexPath.item + 1
-
-            // Если дошли до конца, возвращаемся к началу
-            let nextIndexPath: IndexPath
-            if nextIndex < self.filters.count {
-                nextIndexPath = IndexPath(item: nextIndex, section: 0)
-            } else {
-                nextIndexPath = IndexPath(item: 0, section: 0)
-            }
-
-            // Прокручиваем к следующему элементу
-            self.filtersCollectionView.scrollToItem(at: nextIndexPath, at: .centeredHorizontally, animated: true)
-        }
-    }
-
-    private func stopScrollingAnimation() {
-        scrollTimer?.invalidate()
-        scrollTimer = nil
-    }
-    
-    private func showFilters(_ show: Bool) {
-        UIView.animate(withDuration: 0.25) {
-            self.filtersCollectionView.alpha = show ? 1 : 0
-            self.filtersCollectionView.isUserInteractionEnabled = show
-            self.filtersCollectionView.isHidden = !show
-        }
-    }
-
-    // MARK: - Data Loading
-    private func loadData(reset: Bool = false) {
-        guard !isFetching else { return }
-        
-        if reset {
-            currentOffset = 0
-            checks.removeAll()
-            hasMoreData = true
-            updateUI()
-        }
-        
-        isFetching = true
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let newChecks = try self.repository.fetchPaged(
-                    offset: self.currentOffset,
-                    limit: self.fetchLimit
-                )
-                if newChecks.count < self.fetchLimit {
-                    self.hasMoreData = false
-                }
-                self.currentOffset += newChecks.count
-                
-                DispatchQueue.main.async {
-                    self.checks.append(contentsOf: newChecks)
-                    self.updateUI()
-                    self.isFetching = false
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.isFetching = false
-                    self.showError(.databaseError(error))
-                }
-            }
-        }
-    }
-    
     // MARK: - Actions
     @objc private func addCheck() {
         let addVC = AddCheckViewController(repository: repository)
@@ -419,11 +343,49 @@ final class ChecksViewController: UIViewController, UICollectionViewDelegate {
     }
     
     @objc private func handleNewCheckAdded(_ notification: Notification) {
-        if let newCheck = notification.object as? Receipt {
-            checks.insert(newCheck, at: 0)
-            checks.sort { $0.dateTime > $1.dateTime }
-            updateUI()
+        filtersManager.refreshCurrentFilter()
+    }
+    
+    @objc private func handleReceiptsDidChange() {
+        filtersManager.fetchNextPage()
+        updateUI()
+    }
+    
+    @objc private func handleReceiptsDidImport() {
+        print("Произошла загрузка новых чеков, обновляю UI")
+        filtersManager.resetAll()
+        searchBar.text = ""
+        filtersManager.applySearch(nil)
+        filtersManager.fetchNextPage()
+        updateUI()
+    }
+    
+    @objc private func handleReceiptsDidDeleteAll() {
+        print("Произошло удаление всех чеков, отчищаю UI, удаляю все чеки")
+        filtersManager.resetAll()
+        checks.removeAll()
+        updateUI()
+    }
+    
+    func scrollToTop() {
+        guard checks.count > 0 else { return }
+        tableView.setContentOffset(.zero, animated: true)
+    }
+}
+
+// MARK: Делегат FiltersManagerDelegate
+extension ChecksViewController: FiltersManagerDelegate {
+    func didUpdateChecks(_ checks: [Receipt], append: Bool) {
+        print("✅ Обновляем UI. Чеков загружено: \(checks.count)")
+        
+        if append {
+            self.checks.append(contentsOf: checks)
+        } else {
+            self.checks = checks
         }
+        
+        updateUI()
+        Loader.dismiss()
     }
 }
 
@@ -460,6 +422,8 @@ extension ChecksViewController: UITableViewDelegate {
         feedbackGenerator.prepare()
         feedbackGenerator.impactOccurred()
         
+        Loader.show()
+        
         // Анимация сжатия ячейки
         UIView.animate(withDuration: 0.1, animations: {
             cell.transform = CGAffineTransform(scaleX: 0.95, y: 0.95)
@@ -470,8 +434,6 @@ extension ChecksViewController: UITableViewDelegate {
             }, completion: { _ in
                 tableView.deselectRow(at: indexPath, animated: false)
                 
-                // Показываем Loader и переходим к ReceiptViewController
-                Loader.show()
                 let receipt = self.checks[indexPath.row]
                 let receiptVC = ReceiptViewController(receipt: receipt, shouldShowSuccessAlert: false)
                 let navController = UINavigationController(rootViewController: receiptVC)
@@ -487,58 +449,25 @@ extension ChecksViewController: UITableViewDelegate {
     }
     
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView === tableView else { return }
         guard checks.count >= 5 else { return }
 
-        let offsetY = scrollView.contentOffset.y
-
-        if offsetY > 20, !isTopControlsHidden {
-            isTopControlsHidden = true
-            UIView.animate(withDuration: 0.25, animations: {
-                self.topControlsContainer.alpha = 0
-                self.topControlsContainer.isUserInteractionEnabled = false
-                self.searchBar.isHidden = true
-                self.filtersCollectionView.isHidden = true
-
-                // Изменяем констрейнт таблицы
-                self.tableViewTopConstraint.constant = -self.topControlsDesiredHeight
-                self.view.layoutIfNeeded()
-            })
-        } else if offsetY <= 0, isTopControlsHidden {
-            isTopControlsHidden = false
-            UIView.animate(withDuration: 0.25, animations: {
-                self.topControlsContainer.alpha = 1
-                self.topControlsContainer.isUserInteractionEnabled = true
-                self.searchBar.isHidden = false
-                self.filtersCollectionView.isHidden = false
-
-                // Возвращаем констрейнт таблицы
-                self.tableViewTopConstraint.constant = 0
-                self.view.layoutIfNeeded()
-            })
-        }
-
-        // Пагинация
         let contentHeight = scrollView.contentSize.height
         let scrollHeight = scrollView.frame.size.height
-        if offsetY > contentHeight - scrollHeight - 100,
-           !isFetching,
-           hasMoreData {
-            loadData(reset: false)
+        let offsetY = scrollView.contentOffset.y
+
+        if offsetY > contentHeight - scrollHeight - 100 {
+            filtersManager.fetchNextPage()
         }
     }
 }
 
 // MARK: - UITableViewDataSourcePrefetching
 extension ChecksViewController: UITableViewDataSourcePrefetching {
-    func tableView(_ tableView: UITableView,
-                   prefetchRowsAt indexPaths: [IndexPath])
-    {
-        // Если среди префетч-индексов есть «близкие к концу»
-        if indexPaths.contains(where: { $0.row >= checks.count - 10 }),
-           !isFetching,
-           hasMoreData
-        {
-            loadData(reset: false)
+    func tableView(_ tableView: UITableView, prefetchRowsAt indexPaths: [IndexPath]) {
+        // Если среди префетч-индексов есть «близкие к концу», загружаем следующую страницу
+        if indexPaths.contains(where: { $0.row >= checks.count - 10 }) {
+            filtersManager.fetchNextPage()
         }
     }
 }
@@ -548,19 +477,17 @@ extension ChecksViewController: UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
         if searchText.isEmpty {
             // Если строка поиска пуста, сбрасываем результаты и показываем все
-            loadData(reset: true)
-            showFilters(true) // Показываем фильтры
+            filtersManager.applySearch(nil) // Очистка поиска
             return
         }
-        
-        // Если есть текст в поиске, фильтры скрываются
-        showFilters(false)
-        performSearch(query: searchText)
+        Loader.show()
+        filtersManager.applySearch(searchText)
     }
     
     func searchBarTextDidBeginEditing(_ searchBar: UISearchBar) {
         searchBar.setShowsCancelButton(true, animated: true)
-        selectedFilter = nil
+        
+        filtersManager.applyFilter(AllChecksFilter())
         filtersCollectionView.reloadData()
         
         // Обновляем констрейнт trailing
@@ -571,7 +498,6 @@ extension ChecksViewController: UISearchBarDelegate {
     }
     
     func searchBarTextDidEndEditing(_ searchBar: UISearchBar) {
-        //searchBar.setShowsCancelButton(false, animated: true)
         if searchBar.text?.isEmpty ?? true {
             searchBar.setShowsCancelButton(false, animated: true)
             
@@ -594,58 +520,7 @@ extension ChecksViewController: UISearchBarDelegate {
             self.view.layoutIfNeeded()
         }
         
-        showFilters(true) // Показываем фильтры
-        loadData(reset: true)
-    }
-    
-    private func performSearch(query: String) {
-        guard !query.isEmpty else { return }
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            var predicates: [NSPredicate] = []
-
-            // Если введённая строка соответствует формату даты, добавляем поиск по дате
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "dd.MM.yyyy"
-            if let searchDate = dateFormatter.date(from: query) {
-                let calendar = Calendar.current
-                let startOfDay = calendar.startOfDay(for: searchDate)
-                guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return }
-                let datePredicate = NSPredicate(format: "dateTime >= %@ AND dateTime < %@", startOfDay as NSDate, endOfDay as NSDate)
-                predicates.append(datePredicate)
-            }
-
-            // Строковые предикаты для остальных полей
-            predicates.append(NSPredicate(format: "fiscalSign CONTAINS[cd] %@", query))
-            predicates.append(NSPredicate(format: "companyName CONTAINS[cd] %@", query))
-            predicates.append(NSPredicate(format: "ANY items.name CONTAINS[cd] %@", query))
-
-            // Числовые предикаты, если запрос можно преобразовать в число
-            if let queryAsDouble = Double(query) {
-                let tolerance: Double = 0.01
-                predicates.append(NSPredicate(format: "totalSum >= %f AND totalSum <= %f", queryAsDouble - tolerance, queryAsDouble + tolerance))
-                predicates.append(NSPredicate(format: "ANY items.price >= %f AND ANY items.price <= %f", queryAsDouble - tolerance, queryAsDouble + tolerance))
-            }
-
-            // Объединяем все предикаты через OR, чтобы если совпадает хотя бы один — объект попал в выборку
-            let compoundPredicate = NSCompoundPredicate(orPredicateWithSubpredicates: predicates)
-
-            do {
-                let results = try self.repository.fetch(predicate: compoundPredicate)
-                DispatchQueue.main.async {
-                    self.checks = results
-                    self.updateUI()
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.showError(.searchError(error))
-                    self.checks = []
-                    self.updateUI()
-                }
-            }
-        }
+        filtersManager.applySearch(nil) // Очистка поиска
     }
 }
 
@@ -678,34 +553,54 @@ extension ChecksViewController: CheckCellDelegate {
             checks.remove(at: indexPath.row)
             tableView.deleteRows(at: [indexPath], with: .automatic)
             updateUI()
-
-            // Показываем контейнер, если чеков осталось меньше 5
-            if checks.count < 5 {
-                isTopControlsHidden = false
-                UIView.animate(withDuration: 0.25) {
-                    self.topControlsHeightConstraint.constant = self.topControlsDesiredHeight
-                    self.view.layoutIfNeeded()
-                }
-            }
         } catch {
             showError(.failedToDeleteReceipt(error))
         }
     }
     
     private func openMap(with address: String) {
-        let searchRequest = MKLocalSearch.Request()
-        searchRequest.naturalLanguageQuery = address
+        let raw = UserDefaults.standard.string(forKey: "selectedMapProvider")
+        let provider = MapProvider(rawValue: raw ?? "") ?? .apple
+        let encoded = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? address
 
-        let search = MKLocalSearch(request: searchRequest)
-        search.start { (response, error) in
-            guard let coordinate = response?.mapItems.first?.placemark.coordinate else {
-                self.showError(.placeNotFound(address))
-                return
+        switch provider {
+        case .apple:
+            let searchRequest = MKLocalSearch.Request()
+            searchRequest.naturalLanguageQuery = address
+            let search = MKLocalSearch(request: searchRequest)
+            search.start { (response, error) in
+                guard let coordinate = response?.mapItems.first?.placemark.coordinate else {
+                    self.showError(.placeNotFound(address))
+                    return
+                }
+                let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+                mapItem.name = address
+                mapItem.openInMaps()
             }
 
-            let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
-            mapItem.name = address
-            mapItem.openInMaps()
+        case .yandex:
+            if let appURL = URL(string: "yandexmaps://maps.yandex.ru/?text=\(encoded)"),
+               UIApplication.shared.canOpenURL(appURL) {
+                UIApplication.shared.open(appURL)
+            } else if let webURL = URL(string: "https://yandex.ru/maps/?text=\(encoded)") {
+                UIApplication.shared.open(webURL)
+            }
+
+        case .google:
+            if let appURL = URL(string: "comgooglemaps://?q=\(encoded)"),
+               UIApplication.shared.canOpenURL(appURL) {
+                UIApplication.shared.open(appURL)
+            } else if let webURL = URL(string: "https://www.google.com/maps/search/?api=1&query=\(encoded)") {
+                UIApplication.shared.open(webURL)
+            }
+
+        case .dgis:
+            if let appURL = URL(string: "dgis://2gis.ru/search/\(encoded)"),
+               UIApplication.shared.canOpenURL(appURL) {
+                UIApplication.shared.open(appURL)
+            } else if let webURL = URL(string: "https://2gis.kz/search/\(encoded)") {
+                UIApplication.shared.open(webURL)
+            }
         }
     }
 }
@@ -720,7 +615,7 @@ extension NSLayoutConstraint {
 // MARK: Filters
 extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return filters.count
+        return filtersManager.availableFilters.count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -728,80 +623,37 @@ extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDele
             return UICollectionViewCell()
         }
 
-        var title = filters[indexPath.row]
+        let filter = filtersManager.availableFilters[indexPath.row]
+        let isSelected = filtersManager.activeFilter.title == filter.title
 
-        if indexPath.row == 2, let dateFilter = selectedDateFilter {
-            title = dateFilter // Показываем дату, если она выбрана
-        }
-
-        let showsChevron = (indexPath.row == 2) // Шеврон только у третьего чипса
-        let isSelected = (indexPath.row == 2 && selectedDateFilter != nil) ||
-                         (indexPath.row != 2 && selectedFilter == title)
-
-        cell.configure(with: title, showsChevron: showsChevron)
+        cell.configure(with: filter.title)
         cell.setSelected(isSelected, animated: false)
 
         return cell
     }
     
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        let title = filters[indexPath.row]
-        let showsChevron = (indexPath.row == 2) // Шеврон только у третьего чипса
-        let minimumWidth: CGFloat? = (indexPath.row == 2) ? 152 : nil // Минимальная ширина для третьей кнопки
-        return ChipCell.calculateSize(for: title, showsChevron: showsChevron, minimumWidth: minimumWidth)
+        let filter = filtersManager.availableFilters[indexPath.row]
+        return ChipCell.calculateSize(for: filter.title)
     }
     
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        let selectedTitle = filters[indexPath.row]
+        let selectedFilter = filtersManager.availableFilters[indexPath.row]
         let feedbackGenerator = UIImpactFeedbackGenerator(style: .light)
         feedbackGenerator.prepare()
         feedbackGenerator.impactOccurred()
 
-        if indexPath.row == 2 {
-            // Если нажали "Выбрать дату", показываем DatePicker
-            showDatePicker()
+        searchBar.text = ""
+        searchBar.setShowsCancelButton(false, animated: true)
+        searchBar.resignFirstResponder()
+        
+        if selectedFilter is PlaceholderDateFilter || selectedFilter is DateFilter {
+            showDatePicker() // Всегда открываем DatePicker
         } else {
-            if selectedFilter == selectedTitle {
-                // Если повторно нажали на уже выбранный фильтр — сбрасываем его
-                selectedFilter = nil
-                loadData(reset: true)
-            } else {
-                // Если выбрали новый фильтр — сбрасываем дату и применяем фильтр
-                selectedFilter = selectedTitle
-                selectedDateFilter = nil
-                applyFilter()
-            }
+            filtersManager.applyFilter(selectedFilter)
         }
 
         collectionView.reloadData()
-    }
-    
-    private func applyFilter() {
-        guard let selectedFilter = selectedFilter else {
-            loadData(reset: true)
-            return
-        }
-        
-        let calendar = Calendar.current
-        let now = Date()
-        var startDate: Date?
-        var endDate: Date?
-        
-        switch selectedFilter {
-        case "За неделю":
-            startDate = calendar.date(byAdding: .day, value: -7, to: now)
-            endDate = now
-        case "За месяц":
-            startDate = calendar.date(byAdding: .day, value: -30, to: now)
-            endDate = now
-        default:
-            startDate = nil
-            endDate = nil
-        }
-        
-        if let startDate = startDate, let endDate = endDate {
-            applyCustomDateFilter(startDate: startDate, endDate: endDate)
-        }
     }
     
     private func showDatePicker() {
@@ -811,83 +663,34 @@ extension ChecksViewController: UICollectionViewDataSource, UICollectionViewDele
         datePicker.locale = Locale(identifier: "ru_RU")
         datePicker.preferredDatePickerStyle = .wheels
         datePicker.maximumDate = Calendar.current.startOfDay(for: Date())
+        
+        // Если уже была выбрана дата, устанавливаем её
+        if let selectedDate = filtersManager.selectedDateFilter?.date {
+            datePicker.date = selectedDate
+        }
+        
         alertController.view.addSubview(datePicker)
         datePicker.translatesAutoresizingMaskIntoConstraints = false
-
+        
         NSLayoutConstraint.activate([
             datePicker.leadingAnchor.constraint(equalTo: alertController.view.leadingAnchor, constant: 20),
             datePicker.trailingAnchor.constraint(equalTo: alertController.view.trailingAnchor, constant: -20),
             datePicker.topAnchor.constraint(equalTo: alertController.view.topAnchor, constant: 50),
             datePicker.bottomAnchor.constraint(equalTo: alertController.view.bottomAnchor, constant: -50)
         ])
-
+        
         let confirmAction = UIAlertAction(title: "Применить", style: .default) { _ in
-            let formatter = DateFormatter()
-            formatter.dateFormat = "dd.MM.yyyy"
-            formatter.locale = Locale(identifier: "ru_RU")
-            self.selectedDateFilter = formatter.string(from: datePicker.date)
-            self.selectedFilter = nil // Сбрасываем обычный фильтр
-            self.applyDateFilter(for: datePicker.date)
+            self.filtersManager.applyDateFilter(for: datePicker.date)
             self.filtersCollectionView.reloadData()
         }
-
+        
         let cancelAction = UIAlertAction(title: "Отмена", style: .cancel) { _ in
-            self.selectedDateFilter = nil
+            self.filtersManager.clearDateFilter() // При отмене сбрасываем дату
             self.filtersCollectionView.reloadData()
-            self.loadData(reset: true)
         }
-
+        
         alertController.addAction(confirmAction)
         alertController.addAction(cancelAction)
         present(alertController, animated: true)
-    }
-    
-    private func applyDateFilter(for date: Date) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            let calendar = Calendar.current
-            let startOfDay = calendar.startOfDay(for: date)
-            guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return }
-
-            let predicate = NSPredicate(format: "dateTime >= %@ AND dateTime < %@", startOfDay as NSDate, endOfDay as NSDate)
-
-            do {
-                let results = try self.repository.fetch(predicate: predicate)
-                DispatchQueue.main.async {
-                    self.checks = results
-                    self.updateUI()
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.showError(.databaseError(error))
-                    self.checks = []
-                    self.updateUI()
-                }
-            }
-        }
-    }
-    
-    private func applyCustomDateFilter(startDate: Date, endDate: Date) {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-
-            let predicate = NSPredicate(format: "dateTime >= %@ AND dateTime <= %@", startDate as NSDate, endDate as NSDate)
-
-            do {
-                var filteredResults = try self.repository.fetch(predicate: predicate)
-                filteredResults.sort { $0.dateTime > $1.dateTime } // Сортировка от новых к старым
-                DispatchQueue.main.async {
-                    self.checks = filteredResults
-                    self.updateUI()
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.showError(.databaseError(error))
-                    self.checks = []
-                    self.updateUI()
-                }
-            }
-        }
     }
 }

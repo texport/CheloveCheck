@@ -5,7 +5,7 @@
 //  Created by Sergey Ivanov on 08.01.2025.
 //
 
-enum OperationTypeEnum: UInt16, Encodable {
+enum OperationTypeEnum: UInt16, Codable {
     /// Покупка
     case buy = 0
     /// Возврат покупки

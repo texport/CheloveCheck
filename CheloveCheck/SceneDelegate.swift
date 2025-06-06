@@ -24,15 +24,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             fatalError("Ошибка при загрузке данных \(error)")
         }
         
+        attemptTimeZoneMigration()
         
         // Конфигурация ProgressHUD
         Loader.configure()
-        
+        print("👀 Тема из UserDefaults:", ThemeManager.current.rawValue)
         let window = UIWindow(windowScene: windowScene)
         let tabBarController = MainTabBarController()
         window.rootViewController = tabBarController
         window.makeKeyAndVisible()
-        
+        ThemeManager.applyCurrentTheme()
         self.window = window
     }
 
@@ -63,6 +64,27 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Use this method to save data, release shared resources, and store enough scene-specific state information
         // to restore the scene back to its current state.
     }
-
-
+    
+    private func attemptTimeZoneMigration() {
+        do {
+            let context = CoreDataManager.shared.context
+            let migrationManager = TimeZoneMigrationManager(context: context)
+            try migrationManager.runMigrationIfNeeded()
+        } catch {
+            // 1. Логируем
+            let errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            print("❌ Ошибка миграции дат: \(errorMessage)")
+            
+            // 2. При желании, показываем алерт пользователю
+            DispatchQueue.main.async {
+                let alert = UIAlertController(title: "Ошибка миграции",
+                                              message: errorMessage,
+                                              preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                
+                // Если self.window?.rootViewController есть, показываем на нем
+                self.window?.rootViewController?.present(alert, animated: true)
+            }
+        }
+    }
 }

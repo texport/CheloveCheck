@@ -82,7 +82,7 @@ final class PDFGenerator {
         // Форматирование даты
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "dd.MM.yyyy, HH:mm"
-        dateFormatter.timeZone = TimeZone(abbreviation: "UTC")
+        dateFormatter.timeZone = TimeZone(identifier: "Asia/Almaty")
         dateFormatter.locale = Locale(identifier: "ru_RU")
         let formattedDate = dateFormatter.string(from: receipt.dateTime)
 

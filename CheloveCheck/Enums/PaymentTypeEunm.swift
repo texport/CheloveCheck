@@ -5,7 +5,7 @@
 //  Created by Sergey Ivanov on 09.01.2025.
 //
 
-enum PaymentTypeEnum: UInt16, Encodable, CaseIterable {
+enum PaymentTypeEnum: UInt16, Codable, CaseIterable {
     /// Наличные
     case cash = 0
     /// Банковская карта

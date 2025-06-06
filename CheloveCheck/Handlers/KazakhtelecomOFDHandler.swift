@@ -147,7 +147,7 @@ final class KazakhtelecomOFDHandler: NSObject, URLSessionTaskDelegate, OFDHandle
             let fallbackFormatter = DateFormatter()
             fallbackFormatter.locale = Locale(identifier: "en_US_POSIX")
             fallbackFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
-            fallbackFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+            fallbackFormatter.timeZone = TimeZone(identifier: "Asia/Almaty")
 
             guard let fallbackDate = fallbackFormatter.date(from: transactionDateString) else {
                 throw NSError(
@@ -164,13 +164,14 @@ final class KazakhtelecomOFDHandler: NSObject, URLSessionTaskDelegate, OFDHandle
         
         let itemsArray = items.compactMap { item -> Item? in
             guard let commodity = item["commodity"] as? [String: Any],
-                  let name = commodity["name"] as? String,
+                  let rawName = commodity["name"] as? String,
                   let quantity = commodity["quantity"] as? Double,
                   let price = commodity["price"] as? Double,
                   let sum = commodity["sum"] as? Double else {
                 return nil
             }
             
+            let name = rawName.replacingOccurrences(of: "\\r|\\n", with: "", options: .regularExpression)
             let barcode = commodity["barcode"] as? String
             let exciseStamp = commodity["exciseStamp"] as? String
             let measureUnitCodeRaw = commodity["measureUnitCode"] as? String

@@ -7,7 +7,7 @@
 
 import CoreData
 
-struct Payment {
+struct Payment: Codable {
     let type: PaymentTypeEnum
     let sum: Double
 }

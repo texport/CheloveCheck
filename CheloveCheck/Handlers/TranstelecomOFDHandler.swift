@@ -87,7 +87,8 @@ final class TranstelecomOFDHandler: NSObject, OFDHandler {
 
         // Настраиваем форматтер
         dateFormatter.locale = Locale(identifier: "ru_RU")
-        dateFormatter.timeZone = TimeZone(secondsFromGMT: 0)
+        dateFormatter.timeZone = TimeZone(identifier: "Asia/Almaty")
+        
         dateFormatter.dateFormat = "dd MM yyyy, HH:mm"
 
         // Конвертируем строку в дату
@@ -193,38 +194,38 @@ final class TranstelecomOFDHandler: NSObject, OFDHandler {
 
         // Убираем всё до последнего "/" и оставляем только тип операции
         guard let operationType = operationTypeText.split(separator: "/").last?.trimmingCharacters(in: .whitespacesAndNewlines) else {
-            throw NSError(domain: "HTMLParsingError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Не удалось извлечь тип операции из текста: \(operationTypeText)"])
+            throw ParsingError.invalidStructure("Не удалось извлечь тип операции из текста: \(operationTypeText)")
         }
-
-        // Сопоставляем с `OperationTypeEnum`
+        
         return try mapOperationTypeToEnum(operationType)
     }
-
+    
     private func mapOperationTypeToEnum(_ text: String) throws -> OperationTypeEnum {
-        // Возможные значения для каждой операции
         let buyKeywords = ["Покупка", "Сатып алу", "Purchase", "Купить", "Покуп", "Buy"]
         let buyReturnKeywords = ["Возврат покупки", "Сатып алуды қайтару", "Purchase Return", "Возврат", "Return", "Refund"]
         let sellKeywords = ["Продажа", "Сату", "Sale", "Прода", "Продать", "Sell"]
         let sellReturnKeywords = ["Возврат продажи", "Сатуды қайтару", "Sale Return", "Возврат прод", "Возврат товар", "Return Sale"]
-
+        
         let cleanedText = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-
-        // Сравниваем текст с ключевыми словами
+        
         if buyKeywords.contains(where: { cleanedText.contains($0.lowercased()) }) {
             return .buy
         }
+        
         if buyReturnKeywords.contains(where: { cleanedText.contains($0.lowercased()) }) {
             return .buyReturn
         }
+        
         if sellKeywords.contains(where: { cleanedText.contains($0.lowercased()) }) {
             return .sell
         }
+        
         if sellReturnKeywords.contains(where: { cleanedText.contains($0.lowercased()) }) {
             return .sellReturn
         }
-
+        
         // Если текст не совпал ни с одним из известных значений
-        throw NSError(domain: "HTMLParsingError", code: 0, userInfo: [NSLocalizedDescriptionKey: "Неизвестный тип операции: \(text)"])
+        throw ParsingError.invalidStructure("Неизвестный тип операции: \(text)")
     }
     
     // MARK: - Private Methods
@@ -233,7 +234,6 @@ final class TranstelecomOFDHandler: NSObject, OFDHandler {
             do {
                 // Проверяем, есть ли тег <span class="wb-all"> (только у товаров)
                 guard (try element.select("span.wb-all").first()) != nil else {
-                    print("Пропущена строка, так как это не товар: \(try element.text())")
                     return nil
                 }
                 
@@ -249,17 +249,17 @@ final class TranstelecomOFDHandler: NSObject, OFDHandler {
 
                 // Извлекаем строку с информацией о товаре
                 let itemInfoDiv = try element.select("div.ready_ticket__item").first()
+                
                 guard let itemInfoDiv else {
                     throw ParsingError.invalidStructure("Не найден блок ready_ticket__item")
                 }
 
                 // Исключаем содержимое тега <b>
                 try itemInfoDiv.select("b").remove()
-
+                
                 // Получаем текст без содержимого <b>
                 let itemInfo = try itemInfoDiv.text()
-                print("Обрабатывается строка itemInfo: \(itemInfo)")
-
+                
                 // Парсим информацию о цене, количестве и сумме
                 guard let xIndex = itemInfo.firstIndex(of: "x") else {
                     throw ParsingError.missingSymbol("x", itemInfo)
@@ -271,7 +271,7 @@ final class TranstelecomOFDHandler: NSObject, OFDHandler {
 
                 // Парсим price
                 let priceText = itemInfo[..<xIndex]
-                    .replacingOccurrences(of: " ", with: "") // Удаляем пробелы
+                    .replacingOccurrences(of: " ", with: "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
                 // Извлекаем count и unit
@@ -308,32 +308,36 @@ final class TranstelecomOFDHandler: NSObject, OFDHandler {
 
                 // Парсим sum
                 let sumStart = itemInfo.index(after: equalsIndex)
-
-                // Находим конец суммы, до подстроки "ҚҚС"
-                guard let sumEnd = itemInfo[sumStart...].range(of: "ҚҚС")?.lowerBound else {
-                    throw ParsingError.missingSymbol("ҚҚС", itemInfo)
+                
+                // Находим конец суммы, до подстроки "ҚҚС", если она есть
+                let sumEndIndex: String.Index
+                
+                if let sumEnd = itemInfo[sumStart...].range(of: "ҚҚС")?.lowerBound {
+                    sumEndIndex = sumEnd
+                } else {
+                    sumEndIndex = itemInfo.endIndex
                 }
-
+                
                 // Извлекаем сумму
-                let sumText = itemInfo[sumStart..<sumEnd]
+                let sumText = itemInfo[sumStart..<sumEndIndex]
                     .replacingOccurrences(of: ",", with: ".")
-                    .replacingOccurrences(of: " ", with: "") // Удаляем пробелы
+                    .replacingOccurrences(of: " ", with: "")
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-
-                // Парсим taxType и taxSum
-                let taxInfo = itemInfo[itemInfo.index(after: sumEnd)...]
-                let taxParts = taxInfo.split(separator: ":").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                let taxType = taxParts.first
-                let taxSumText = taxParts.last?
-                    .replacingOccurrences(of: " ", with: "") // Удаляем пробелы
-
-                guard let price = Double(priceText),
-                      let sum = Double(sumText),
-                      let taxSum = Double(taxSumText ?? "") else {
-                    throw ParsingError.invalidStructure("Не удалось преобразовать данные (price: \(priceText), sum: \(sumText), taxSum: \(taxSumText ?? ""))")
+                
+                // Инициализируем переменные налога
+                var taxType: String? = nil
+                var taxSum: Double? = nil
+                
+                // Если в строке есть "ҚҚС", вызываем метод для извлечения налога
+                if itemInfo.contains("ҚҚС") {
+                    (taxType, taxSum) = extractTaxInfo(from: itemInfo)
                 }
-
-                // Формируем объект Item
+                
+                guard let price = Double(priceText),
+                      let sum = Double(sumText) else {
+                    throw ParsingError.invalidStructure("Не удалось преобразовать price или sum: price: \(priceText), sum: \(sumText)")
+                }
+                
                 return Item(
                     barcode: barcode,
                     codeMark: nil,
@@ -350,6 +354,28 @@ final class TranstelecomOFDHandler: NSObject, OFDHandler {
             } catch {
                 throw error
             }
+        }
+    }
+    
+    /// Извлекает тип налога и его сумму, если они присутствуют
+    private func extractTaxInfo(from itemInfo: String) -> (String?, Double?) {
+        do {
+            // Находим подстроку "ҚҚС" и берем всё, что после нее
+            guard let taxStart = itemInfo.range(of: "ҚҚС")?.upperBound else {
+                return (nil, nil)
+            }
+
+            let taxInfo = itemInfo[taxStart...]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            let taxParts = taxInfo.split(separator: ":").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+            let taxType = taxParts.first
+            let taxSum = taxParts.last.flatMap { Double($0.replacingOccurrences(of: " ", with: "")) }
+
+            return (taxType, taxSum)
+        } catch {
+            return (nil, nil)
         }
     }
     

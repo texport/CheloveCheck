@@ -115,7 +115,7 @@ final class CheckCell: UITableViewCell {
         
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "dd.MM.yyyy, HH:mm"
-        dateFormatter.timeZone = TimeZone(abbreviation: "UTC")
+        dateFormatter.timeZone = TimeZone(identifier: "Asia/Almaty")
         dateLabel.text = dateFormatter.string(from: receipt.dateTime)
         
         address = receipt.companyAddress
