@@ -8,104 +8,255 @@
 import Foundation
 
 final class KazakhtelecomOFDHandler: NSObject, URLSessionTaskDelegate, OFDHandler {
-    func fetchCheck(from initialURL: URL, completion: @escaping (Result<Receipt, Error>) -> Void) {
-        // Настройка сессии с делегатом
-        print("Ссылка на чек: \(initialURL)")
+    private enum Constants {
+        static let baseApiUrl = "https://consumer.oofd.kz/api/tickets/get-by-url"
+        static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36"
+        static let maxResponseSize = 10 * 1024 * 1024 // 10 MB
+        static let requestTimeout: TimeInterval = 30
+    }
+    
+    private enum ApiError: Error {
+        case invalidUrl
+        case invalidResponse
+        case invalidContentType
+        case noData
+        case invalidJson
+        case httpError(Int)
+        case responseTooLarge
+        case requestCancelled
+        case sslError
+        
+        var localizedDescription: String {
+            switch self {
+            case .invalidUrl:
+                return "Некорректный URL"
+            case .invalidResponse:
+                return "Некорректный ответ от сервера"
+            case .invalidContentType:
+                return "Чек не найден!"
+            case .noData:
+                return "Нет данных в ответе"
+            case .invalidJson:
+                return "Неверный формат JSON"
+            case .httpError(let code):
+                return "Ошибка HTTP: \(code)"
+            case .responseTooLarge:
+                return "Размер ответа превышает допустимый"
+            case .requestCancelled:
+                return "Запрос был отменен"
+            case .sslError:
+                return "Ошибка SSL/TLS"
+            }
+        }
+    }
+    
+    private var session: URLSession?
+    private var currentTask: URLSessionDataTask?
+    
+    deinit {
+        session?.invalidateAndCancel()
+        session = nil
+    }
+    
+    private func setupSession() -> URLSession {
+        if let existingSession = session {
+            return existingSession
+        }
         
         let sessionConfig = URLSessionConfiguration.default
-        let session = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
+        sessionConfig.timeoutIntervalForRequest = Constants.requestTimeout
+        sessionConfig.timeoutIntervalForResource = Constants.requestTimeout
+        sessionConfig.waitsForConnectivity = true
         
-        var request = URLRequest(url: initialURL)
+        let newSession = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: .main)
+        session = newSession
+        return newSession
+    }
+    
+    func fetchCheck(from initialURL: URL, completion: @escaping (Result<Receipt, Error>) -> Void) {
+        print("Ссылка на чек: \(initialURL)")
+        
+        // Отменяем предыдущий запрос, если он есть
+        currentTask?.cancel()
+        
+        do {
+            let apiURL = try createApiUrl(from: initialURL)
+            print("API URL: \(apiURL)")
+            
+            let request = createRequest(for: apiURL)
+            performRequest(request, initialURL: initialURL, completion: completion)
+        } catch {
+            print("Ошибка при создании API URL: \(error.localizedDescription)")
+            completion(.failure(error))
+        }
+    }
+    
+    private func createApiUrl(from initialURL: URL) throws -> URL {
+        let params = try extractParams(from: initialURL)
+        print("Извлеченные параметры: \(params)")
+        return try buildApiUrl(with: params)
+    }
+    
+    private func extractParams(from url: URL) throws -> [String: String] {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let queryItems = components.queryItems else {
+            print("Ошибка: не удалось извлечь параметры из URL: \(url)")
+            throw ApiError.invalidUrl
+        }
+        
+        let params = Dictionary(uniqueKeysWithValues: queryItems.map { ($0.name, $0.value ?? "") })
+        print("Параметры из URL: \(params)")
+        return params
+    }
+    
+    private func buildApiUrl(with params: [String: String]) throws -> URL {
+        var components = URLComponents(string: Constants.baseApiUrl)!
+        
+        let queryItems = [
+            URLQueryItem(name: "t", value: params["t"]),
+            URLQueryItem(name: "i", value: params["i"]),
+            URLQueryItem(name: "f", value: params["f"]),
+            URLQueryItem(name: "s", value: params["s"])
+        ].compactMap { $0 }
+        
+        print("Query items для API URL: \(queryItems)")
+        components.queryItems = queryItems
+        
+        guard let apiURL = components.url else {
+            print("Ошибка: не удалось создать API URL")
+            throw ApiError.invalidUrl
+        }
+        
+        return apiURL
+    }
+    
+    private func createRequest(for url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.setValue(Constants.userAgent, forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 30
+        return request
+    }
+    
+    private func performRequest(_ request: URLRequest, initialURL: URL, completion: @escaping (Result<Receipt, Error>) -> Void) {
+        print("Начинаем выполнение запроса к URL: \(request.url?.absoluteString ?? "")")
         
-        // Добавил User-Agent
-        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36", forHTTPHeaderField: "User-Agent")
+        let session = setupSession()
         
-        let task = session.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("Ошибка первого запроса: \(error.localizedDescription)")
-                completion(.failure(error))
-                return
-            }
+        let task = session.dataTask(with: request) { [weak self] data, response, error in
+            guard let self = self else { return }
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                print("Ошибка: Некорректный HTTP-ответ")
-                completion(.failure(NSError(domain: "InvalidResponse", code: 0, userInfo: nil)))
-                return
-            }
-            
-            // Если ответ не JSON, то чек не найден
-            guard let contentType = httpResponse.allHeaderFields["Content-Type"] as? String,
-                  contentType.contains("application/json") else {
-                completion(.failure(NSError(domain: "InvalidContentType", code: 0, userInfo: [NSLocalizedDescriptionKey: "Чек не найден!"])))
-                return
-            }
-            
-            // Если это успешный запрос (например, JSON при 200)
-            if httpResponse.statusCode == 200 {
-                guard let data = data else {
-                    print("Ошибка: Нет данных в ответе")
-                    
-                    completion(.failure(NSError(domain: "NoData", code: 0, userInfo: nil)))
-                    return
-                }
-                
-                do {
-                    if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
-                        do {
-                            // Преобразование JSON в Receipt
-                            let receipt = try self.convertToReceipt(from: json, url: initialURL)
-                            completion(.success(receipt))
-                        } catch {
-                            print("Ошибка конвертации JSON в Receipt: \(error.localizedDescription)")
-                            completion(.failure(error))
-                        }
-                    } else {
-                        print("Ошибка: Неверный формат JSON")
-                        completion(.failure(NSError(domain: "InvalidJSON", code: 0, userInfo: nil)))
-                    }
-                } catch {
-                    print("Ошибка парсинга JSON: \(error.localizedDescription)")
+            if let error = error as NSError? {
+                if error.code == NSURLErrorCancelled {
+                    print("Запрос был отменен")
+                    completion(.failure(ApiError.requestCancelled))
+                } else {
+                    print("Ошибка сетевого запроса: \(error.localizedDescription)")
                     completion(.failure(error))
                 }
-            } else {
-                print("Ошибка: HTTP-код \(httpResponse.statusCode)")
-                completion(.failure(NSError(domain: "HTTPError", code: httpResponse.statusCode, userInfo: nil)))
-            }
-        }
-        task.resume()
-    }
-
-    // Обработка перенаправлений
-    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
-        print("Перенаправление: HTTP-код \(response.statusCode)")
-        print("Заголовки редиректа: \(response.allHeaderFields)")
-
-        // Если Location найден
-        if let location = response.allHeaderFields["Location"] as? String {
-            print("Найден Location: \(location)")
-            
-            // Формируем новый URL
-            let baseAPIURL = "https://consumer.oofd.kz/api/tickets"
-            guard let newURL = URL(string: baseAPIURL + location) else {
-                print("Ошибка: Невозможно сформировать URL")
-                completionHandler(nil)
                 return
             }
             
-            print("Сформированный новый URL: \(newURL)")
+            print("Получен ответ от сервера")
             
-            // Создаем новый запрос
-            var newRequest = URLRequest(url: newURL)
-            newRequest.httpMethod = "GET"
-            newRequest.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36", forHTTPHeaderField: "User-Agent")
-            
-            // Завершаем редирект с новым запросом
-            completionHandler(newRequest)
-        } else {
-            print("Location отсутствует, продолжаем с оригинальным запросом")
-            completionHandler(request)
+            do {
+                let receipt = try self.handleResponse(data: data, response: response, initialURL: initialURL)
+                print("Успешно создан Receipt")
+                completion(.success(receipt))
+            } catch let apiError as ApiError {
+                print("Ошибка API: \(apiError.localizedDescription)")
+                completion(.failure(apiError))
+            } catch {
+                print("Неизвестная ошибка: \(error.localizedDescription)")
+                completion(.failure(error))
+            }
         }
+        
+        currentTask = task
+        print("Запускаем задачу")
+        task.resume()
+    }
+    
+    // MARK: - URLSessionTaskDelegate
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        print("Получен SSL/TLS challenge")
+        
+        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust {
+            if let serverTrust = challenge.protectionSpace.serverTrust {
+                // Проверяем валидность сертификата
+                var result: SecTrustResultType = .invalid
+                let status = SecTrustEvaluate(serverTrust, &result)
+                
+                if status == errSecSuccess && (result == .proceed || result == .unspecified) {
+                    let credential = URLCredential(trust: serverTrust)
+                    completionHandler(.useCredential, credential)
+                    return
+                }
+            }
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+        
+        completionHandler(.performDefaultHandling, nil)
+    }
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        print("Получен редирект на: \(request.url?.absoluteString ?? "")")
+        completionHandler(request)
+    }
+    
+    private func handleResponse(data: Data?, response: URLResponse?, initialURL: URL) throws -> Receipt {
+        print("Начинаем обработку ответа")
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("Ошибка: ответ не является HTTP ответом")
+            throw ApiError.invalidResponse
+        }
+        
+        print("HTTP статус код: \(httpResponse.statusCode)")
+        print("HTTP заголовки: \(httpResponse.allHeaderFields)")
+        
+        guard httpResponse.statusCode == 200 else {
+            print("Ошибка: HTTP код \(httpResponse.statusCode)")
+            throw ApiError.httpError(httpResponse.statusCode)
+        }
+        
+        guard let data = data else {
+            print("Ошибка: нет данных в ответе")
+            throw ApiError.noData
+        }
+        
+        // Проверяем размер данных
+        guard data.count <= Constants.maxResponseSize else {
+            print("Ошибка: размер ответа превышает допустимый (\(data.count) байт)")
+            throw ApiError.responseTooLarge
+        }
+        
+        if let jsonString = String(data: data, encoding: .utf8) {
+            print("Полученный JSON: \(jsonString)")
+        }
+        
+        if let contentType = httpResponse.allHeaderFields["Content-Type"] as? String {
+            print("Content-Type: \(contentType)")
+            guard contentType.contains("application/json") else {
+                print("Ошибка: неверный Content-Type: \(contentType)")
+                throw ApiError.invalidContentType
+            }
+        } else {
+            print("Content-Type отсутствует в заголовках")
+        }
+        
+        return try parseResponse(data: data, initialURL: initialURL)
+    }
+    
+    private func parseResponse(data: Data, initialURL: URL) throws -> Receipt {
+        guard let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
+            print("Ошибка: не удалось распарсить JSON")
+            throw ApiError.invalidJson
+        }
+        
+        return try convertToReceipt(from: json, url: initialURL)
     }
     
     private func convertToReceipt(from json: [String: Any], url: URL) throws -> Receipt {
